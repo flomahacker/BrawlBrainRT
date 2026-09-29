@@ -21,22 +21,55 @@ class YoloOnnxDetector(
 ) : AutoCloseable {
 
     private val env = OrtEnvironment.getEnvironment()
-    private val session: OrtSession
+    private data class SessionBundle(val session: OrtSession, val backend: String)
+
+    private val bundle = createSession()
+    private val session = bundle.session
+    val backend: String = bundle.backend
+
     private val inputName: String
     private val inputSize: Int
 
     init {
-        session = OrtSession.SessionOptions().run {
-            setIntraOpNumThreads(2)
-            setInterOpNumThreads(1)
-            setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-            env.createSession(modelBytes, this)
-        }
-
         inputName = session.inputNames.first()
         val info = session.inputInfo[inputName]?.info as? TensorInfo
         val shape = info?.shape ?: longArrayOf(1, 3, 640, 640)
         inputSize = (shape.lastOrNull { it > 0 }?.toInt() ?: 640).coerceIn(320, 640)
+    }
+
+    private fun createSession(): SessionBundle {
+        try {
+            val options = OrtSession.SessionOptions()
+            options.setIntraOpNumThreads(2)
+            options.setInterOpNumThreads(1)
+            options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+            options.addNnapi()
+            return SessionBundle(
+                env.createSession(modelBytes, options),
+                "NNAPI"
+            )
+        } catch (_: Throwable) {
+            try {
+                val options = OrtSession.SessionOptions()
+                options.setIntraOpNumThreads(2)
+                options.setInterOpNumThreads(1)
+                options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                options.addXnnpack(emptyMap())
+                return SessionBundle(
+                    env.createSession(modelBytes, options),
+                    "XNNPACK"
+                )
+            } catch (_: Throwable) {
+                val options = OrtSession.SessionOptions()
+                options.setIntraOpNumThreads(2)
+                options.setInterOpNumThreads(1)
+                options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                return SessionBundle(
+                    env.createSession(modelBytes, options),
+                    "CPU"
+                )
+            }
+        }
     }
 
     fun detect(source: Bitmap): List<Detection> {
@@ -132,7 +165,6 @@ class YoloOnnxDetector(
 }
 
 private object YoloParser {
-
     fun parse(
         buffer: FloatBuffer,
         shape: LongArray,
@@ -147,11 +179,9 @@ private object YoloParser {
 
         val a = shape[1].toInt()
         val b = shape[2].toInt()
-
         val channelsFirst = a <= b
         val channels = if (channelsFirst) a else b
         val count = if (channelsFirst) b else a
-
         if (channels < 5 || count <= 0) return emptyList()
 
         val raw = FloatArray(buffer.remaining())
@@ -209,22 +239,17 @@ private object YoloParser {
         return nms(candidates, iouThreshold).take(10)
     }
 
-    private fun nms(
-        input: List<Detection>,
-        threshold: Float
-    ): List<Detection> {
+    private fun nms(input: List<Detection>, threshold: Float): List<Detection> {
         val output = ArrayList<Detection>()
         val remaining = input.sortedByDescending { it.confidence }.toMutableList()
 
         while (remaining.isNotEmpty()) {
             val best = remaining.removeAt(0)
             output += best
-
             remaining.removeAll {
                 it.label == best.label && iou(best, it) >= threshold
             }
         }
-
         return output
     }
 
@@ -233,17 +258,14 @@ private object YoloParser {
         val ay1 = a.cy - a.height / 2f
         val ax2 = a.cx + a.width / 2f
         val ay2 = a.cy + a.height / 2f
-
         val bx1 = b.cx - b.width / 2f
         val by1 = b.cy - b.height / 2f
         val bx2 = b.cx + b.width / 2f
         val by2 = b.cy + b.height / 2f
-
         val iw = max(0f, min(ax2, bx2) - max(ax1, bx1))
         val ih = max(0f, min(ay2, by2) - max(ay1, by1))
         val intersection = iw * ih
         val union = a.width * a.height + b.width * b.height - intersection
-
         return if (union <= 0f) 0f else intersection / union
     }
 
