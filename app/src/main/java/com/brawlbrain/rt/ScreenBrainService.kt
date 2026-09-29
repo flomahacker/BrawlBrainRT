@@ -265,6 +265,7 @@ class ScreenBrainService : Service() {
         try {
             image.use { currentImage ->
                 val thermalInterval = effectiveEntityInterval()
+                val effectiveLeadMs = (config.predictionLeadMs + config.pipelineDelayMs).coerceIn(300L, 550L)
                 val runYolo = now - lastEntityAt >= thermalInterval
                 val safeZoneEnabled = config.gameMode == "Showdown"
 
