@@ -47,8 +47,7 @@ class MainActivity : Activity() {
         })
 
         root.addView(TextView(this).apply {
-            text = "ReShade-подобный screen shader
-Bloom • Color • CRT • Grain • RGB Split • Sharpen"
+            text = "ReShade-подобный screen shader\nBloom • Color • CRT • Grain • RGB Split • Sharpen"
             textSize = 15f
             setTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER
@@ -137,9 +136,7 @@ Bloom • Color • CRT • Grain • RGB Split • Sharpen"
     }
 
     private fun updateStatus() {
-        status.text = if (Settings.canDrawOverlays(this)) {
-            "Слой: разрешён
-Нажми запуск и выбери окно/экран для захвата"
+        status.text = if (Settings.canDrawOverlays(this)) {\n            "Слой: разрешён\\nНажми запуск и выбери окно/экран для захвата"
         } else {
             "Нужно разрешение «поверх других приложений»"
         }
