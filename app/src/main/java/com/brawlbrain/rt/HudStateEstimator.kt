@@ -16,8 +16,6 @@ class HudStateEstimator {
 
     private val sampleW = 64
     private val sampleH = 36
-    private val pixels = ByteArray(sampleW * sampleH * 3)
-
     fun analyze(
         image: Image,
         captureW: Int,
@@ -89,9 +87,12 @@ class HudStateEstimator {
                     buffer, pixelStride, rowStride,
                     captureW, captureH, xn, yn
                 )
-                val h = hue(rgb[0], rgb[1], rgb[2])
-                val s = saturation(rgb[0], rgb[1], rgb[2])
-                val v = max(rgb[0], max(rgb[1], rgb[2]))
+                val r = (rgb shr 16) and 0xFF
+                val g = (rgb shr 8) and 0xFF
+                val b = rgb and 0xFF
+                val h = hue(r, g, b)
+                val s = saturation(r, g, b)
+                val v = max(r, max(g, b)) / 255f
 
                 if (s > 0.32f && v > 0.35f && h in 35f..155f) {
                     colored++
@@ -141,9 +142,12 @@ class HudStateEstimator {
                         buffer, pixelStride, rowStride,
                         captureW, captureH, xn, yn
                     )
-                    val h = hue(rgb[0], rgb[1], rgb[2])
-                    val s = saturation(rgb[0], rgb[1], rgb[2])
-                    val v = max(rgb[0], max(rgb[1], rgb[2]))
+                    val r = (rgb shr 16) and 0xFF
+                    val g = (rgb shr 8) and 0xFF
+                    val b = rgb and 0xFF
+                    val h = hue(r, g, b)
+                    val s = saturation(r, g, b)
+                    val v = max(r, max(g, b)) / 255f
 
                     if (s > 0.22f && v > 0.55f && h in 25f..75f) {
                         score += 1f
@@ -186,9 +190,12 @@ class HudStateEstimator {
                     buffer, pixelStride, rowStride,
                     captureW, captureH, xn, yn
                 )
-                val h = hue(rgb[0], rgb[1], rgb[2])
-                val s = saturation(rgb[0], rgb[1], rgb[2])
-                val v = max(rgb[0], max(rgb[1], rgb[2]))
+                val r = (rgb shr 16) and 0xFF
+                val g = (rgb shr 8) and 0xFF
+                val b = rgb and 0xFF
+                val h = hue(r, g, b)
+                val s = saturation(r, g, b)
+                val v = max(r, max(g, b)) / 255f
 
                 total++
                 if (s > 0.28f && v > 0.55f && h in 28f..80f) {
@@ -210,17 +217,15 @@ class HudStateEstimator {
         height: Int,
         x: Float,
         y: Float
-    ): IntArray {
+    ): Int {
         val sx = (x * (width - 1)).toInt().coerceIn(0, width - 1)
         val sy = (y * (height - 1)).toInt().coerceIn(0, height - 1)
         val offset = sy * rowStride + sx * pixelStride
-        if (offset < 0 || offset + 2 >= buffer.limit()) return intArrayOf(0, 0, 0)
-
-        return intArrayOf(
-            buffer.get(offset).toInt() and 0xFF,
-            buffer.get(offset + 1).toInt() and 0xFF,
-            buffer.get(offset + 2).toInt() and 0xFF
-        )
+        if (offset < 0 || offset + 2 >= buffer.limit()) return 0
+        val r = buffer.get(offset).toInt() and 0xFF
+        val g = buffer.get(offset + 1).toInt() and 0xFF
+        val b = buffer.get(offset + 2).toInt() and 0xFF
+        return (r shl 16) or (g shl 8) or b
     }
 
     private fun saturation(r8: Int, g8: Int, b8: Int): Float {
