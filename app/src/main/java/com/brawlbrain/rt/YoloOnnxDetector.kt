@@ -42,7 +42,10 @@ class YoloOnnxDetector(
         inputSize = (shape.lastOrNull { it > 0 }?.toInt() ?: 640).coerceIn(320, 640)
     }
 
-    private fun createSession(preferNnapi: Boolean): SessionBundle {
+    private fun createSession(
+        preferNnapi: Boolean,
+        preferXnnpack: Boolean = true
+    ): SessionBundle {
         if (preferNnapi) {
             try {
                 val options = OrtSession.SessionOptions()
@@ -125,7 +128,10 @@ class YoloOnnxDetector(
                 }
 
                 return try {
-                    val fallback = createSession(preferNnapi = false)
+                    val fallback = createSession(
+                        preferNnapi = false,
+                        preferXnnpack = backend == "NNAPI"
+                    )
                     session = fallback.session
                     backend = fallback.backend
                     lastError = "fallback -> " + backend
