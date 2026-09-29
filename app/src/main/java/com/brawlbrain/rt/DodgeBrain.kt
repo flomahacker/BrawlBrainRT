@@ -31,7 +31,7 @@ class DodgeBrain {
         }
 
         val candidate = enemies
-            .filter { it.confidence >= cfg.confidencePercent / 100f && distance(player, it) >= 0.30f }
+            .filter { it.confidence >= cfg.confidencePercent / 100f && distance(player, it) >= 0.24f }
             .minByOrNull { distance(player, it) }
             ?: return DodgeCommand(false, 0f, 0f, "NO-RANGED-TARGET")
 
@@ -71,7 +71,7 @@ class DodgeBrain {
             candidate.confidence * 0.30f
         ).coerceIn(0f, 1f)
 
-        val should = danger >= 0.42f
+        val should = danger >= 0.36f
         if (!should) return DodgeCommand(false, 0f, 0f, "WAIT")
 
         val lateral = vx * nx + vy * ny
