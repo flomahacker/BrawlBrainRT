@@ -137,10 +137,10 @@ class MainActivity : Activity() {
 
     private fun updateStatus() {
         status.text = if (Settings.canDrawOverlays(this)) {
-            "Слой: разрешён" + System.lineSeparator() + "Нажми запуск и выбери окно/экран для захвата"
+            "Слой: разрешён" + System.lineSeparator() + "Нажми запуск и выдай разрешение на захват"
+        } else {
             "Нужно разрешение «поверх других приложений»"
         }
-    }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 }
