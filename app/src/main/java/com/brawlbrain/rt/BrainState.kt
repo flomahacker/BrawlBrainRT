@@ -48,7 +48,8 @@ data class EnemyTrackVisual(
     val confidence: Float,
     val visible: Boolean,
     val ageMs: Long,
-    val ageText: String
+    val ageText: String,
+    val idText: String
 )
 
 data class BrainFrame(
