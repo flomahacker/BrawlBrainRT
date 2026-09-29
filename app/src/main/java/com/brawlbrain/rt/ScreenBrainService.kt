@@ -1,6 +1,10 @@
 package com.brawlbrain.rt
 
-import android.app.*
+import android.app.Activity
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
@@ -12,11 +16,18 @@ import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
-import android.os.*
+import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.Settings
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.view.Gravity
 import android.view.WindowManager
 import java.nio.ByteBuffer
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 class ScreenBrainService : Service() {
@@ -35,7 +46,7 @@ class ScreenBrainService : Service() {
     private var overlay: OverlayView? = null
     private var inGameControl: InGameControl? = null
 
-    private val mainHandler = Handler(Looper.getMainLooper())
+    private val mainHandler = Handler(android.os.Looper.getMainLooper())
     private lateinit var worker: HandlerThread
     private lateinit var workerHandler: Handler
 
@@ -44,39 +55,53 @@ class ScreenBrainService : Service() {
 
     private lateinit var entityDetector: YoloOnnxDetector
     private lateinit var wallDetector: YoloOnnxDetector
+
     private val brain = TacticalBrain()
     private val dodgeBrain = DodgeBrain()
-    private val projectileAnalyzer = ProjectileThreatAnalyzer()
     private val combatIntel = CombatIntel()
+    private val enemyTracker = DetectionTracker()
+    private val hudEstimator = HudStateEstimator()
+    private val safeZoneEstimator = SafeZoneEstimator()
+    private val alertEngine = AlertEngine()
+
+    private lateinit var powerManager: PowerManager
+    private lateinit var vibrator: Vibrator
 
     private val busy = AtomicBoolean(false)
     private var lastEntityAt = 0L
     private var lastWallAt = 0L
     private var lastInferenceAt = 0L
+    private var lastRenderAt = 0L
+    private var lastWarning = WarningType.NONE
 
     @Volatile
     private var config = BrainConfig()
-    private var latestEntities = emptyList<Detection>()
+
     private var latestWalls = emptyList<Detection>()
     private var latestFps = 0f
     private var latestInferenceMs = 0L
+    private var latestHud = HudState()
+    private var latestZone = SafeZoneState()
     @Volatile private var latestSnapshot: BrainFrame? = null
 
     override fun onCreate() {
         super.onCreate()
 
         config = BrainPrefs.load(this)
+        powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        vibrator = getSystemService(VIBRATOR_SERVICE) as Vibrator
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
         worker = HandlerThread(
             "BrawlBrainVision",
-            Process.THREAD_PRIORITY_MORE_FAVORABLE
+            android.os.Process.THREAD_PRIORITY_MORE_FAVORABLE
         )
         worker.start()
         workerHandler = Handler(worker.looper)
 
         startBrainForeground()
         running = true
+
         attachOverlay()
         inGameControl = InGameControl(this, windowManager) { updated ->
             config = updated
@@ -102,7 +127,7 @@ class ScreenBrainService : Service() {
             }
         } catch (_: Throwable) {
             mainHandler.post {
-                overlay?.contentDescription = "YOLO не загрузился"
+                overlay?.contentDescription = "Vision model failed to load"
             }
             stopSelf()
         }
@@ -124,7 +149,7 @@ class ScreenBrainService : Service() {
 
         val notification = Notification.Builder(this, channelId)
             .setContentTitle("BrawlBrain RT")
-            .setContentText("AI vision работает локально")
+            .setContentText("Local real-time vision")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setOngoing(true)
             .build()
@@ -205,6 +230,24 @@ class ScreenBrainService : Service() {
         )
     }
 
+    private fun effectiveEntityInterval(): Long {
+        var interval = config.entityIntervalMs.coerceIn(60L, 100L)
+
+        if (Build.VERSION.SDK_INT >= 29) {
+            interval += when (powerManager.currentThermalStatus) {
+                PowerManager.THERMAL_STATUS_LIGHT -> 10L
+                PowerManager.THERMAL_STATUS_MODERATE -> 25L
+                PowerManager.THERMAL_STATUS_SEVERE -> 50L
+                PowerManager.THERMAL_STATUS_CRITICAL -> 90L
+                PowerManager.THERMAL_STATUS_EMERGENCY -> 140L
+                PowerManager.THERMAL_STATUS_SHUTDOWN -> 220L
+                else -> 0L
+            }
+        }
+
+        return interval
+    }
+
     private fun consumeLatest(ir: ImageReader, captureW: Int, captureH: Int) {
         val now = SystemClock.elapsedRealtime()
 
@@ -220,36 +263,30 @@ class ScreenBrainService : Service() {
         }
 
         try {
-            image.use {
-                val dodgeEnabled = config.autoDodge
-                val cached = latestSnapshot
+            image.use { currentImage ->
+                val thermalInterval = effectiveEntityInterval()
+                val runYolo = now - lastEntityAt >= thermalInterval
+                val safeZoneEnabled = config.gameMode == "Showdown"
 
-                // This layer runs on every available screen frame when Dodge is ON.
-                // It uses a tiny grayscale grid instead of another neural network.
-                val projectileThreat = if (dodgeEnabled) {
-                    projectileAnalyzer.analyze(
-                        it,
-                        captureW,
-                        captureH,
-                        cached?.player,
-                        cached?.enemies ?: latestEntities.filter { d -> d.label == "enemy" }
-                            .take(3),
-                        now
-                    )
-                } else {
-                    projectileAnalyzer.reset()
-                    null
-                }
+                latestZone = safeZoneEstimator.analyze(
+                    currentImage,
+                    captureW,
+                    captureH,
+                    config,
+                    safeZoneEnabled
+                )
 
-                val dodgeVisionInterval = if (dodgeEnabled) 68L else config.entityIntervalMs
-                val runYolo = now - lastEntityAt >= dodgeVisionInterval
+                val predicted = enemyTracker.predictOnly(
+                    now,
+                    config.predictionLeadMs
+                )
 
-                var snapshot = latestSnapshot
+                var active = latestSnapshot
 
                 if (runYolo) {
                     lastEntityAt = now
 
-                    val plane = it.planes[0]
+                    val plane = currentImage.planes[0]
                     val buffer: ByteBuffer = plane.buffer
                     val pixelStride = plane.pixelStride
                     val rowStride = plane.rowStride
@@ -263,7 +300,7 @@ class ScreenBrainService : Service() {
                     )
                     raw.copyPixelsFromBuffer(buffer)
 
-                    val frame =
+                    val frameBitmap =
                         if (rawWidth == captureW) {
                             raw
                         } else {
@@ -285,15 +322,25 @@ class ScreenBrainService : Service() {
                     try {
                         val t0 = SystemClock.elapsedRealtime()
 
-                        latestEntities = entityDetector.detect(frame)
+                        val detected = entityDetector.detect(frameBitmap)
+                        val tracked = enemyTracker.update(
+                            detected.filter { it.label == "enemy" },
+                            t0,
+                            config.predictionLeadMs
+                        )
 
-                        val wallNow = SystemClock.elapsedRealtime()
+                        val entities = ArrayList<Detection>(detected.size)
+                        for (d in detected) {
+                            if (d.label != "enemy") entities += d
+                        }
+                        entities.addAll(tracked.visible)
+
                         if (config.showWalls &&
                             ::wallDetector.isInitialized &&
-                            wallNow - lastWallAt >= config.wallIntervalMs
+                            t0 - lastWallAt >= config.wallIntervalMs
                         ) {
-                            latestWalls = wallDetector.detect(frame)
-                            lastWallAt = wallNow
+                            latestWalls = wallDetector.detect(frameBitmap)
+                            lastWallAt = t0
                         } else if (!config.showWalls) {
                             latestWalls = emptyList()
                         }
@@ -306,24 +353,33 @@ class ScreenBrainService : Service() {
                             else 1000f / (t1 - lastInferenceAt).coerceAtLeast(1L)
                         lastInferenceAt = t1
 
-                        snapshot = brain.decide(
-                            latestEntities,
+                        active = brain.decide(
+                            entities,
                             latestWalls,
                             latestFps,
                             latestInferenceMs,
-                            "YOLOv11",
+                            entityDetector.backend,
                             config
                         )
+
+                        latestHud = hudEstimator.analyze(
+                            currentImage,
+                            captureW,
+                            captureH,
+                            active.player,
+                            config
+                        )
+
                         val intel = combatIntel.decide(
-                            snapshot.player,
-                            snapshot.enemies,
-                            snapshot.teammates,
-                            projectileThreat,
+                            active.player,
+                            active.enemies,
+                            active.teammates,
+                            null,
                             config.brawler,
                             t1
                         )
 
-                        snapshot = snapshot.copy(
+                        active = active.copy(
                             intelActionTitle = intel.actionTitle,
                             intelActionDetail = intel.actionDetail,
                             intelFocusX = intel.focusX,
@@ -331,29 +387,91 @@ class ScreenBrainService : Service() {
                             intelFocusScore = intel.focusScore,
                             fireWindow = intel.fireWindow,
                             actionX = intel.actionX,
-                            actionY = intel.actionY
+                            actionY = intel.actionY,
+                            trackVisuals = tracked.visuals,
+                            trackCount = tracked.trackCount,
+                            hud = latestHud,
+                            gasDetected = latestZone.detected,
+                            safeZoneX = latestZone.x,
+                            safeZoneY = latestZone.y
                         )
-
-                        latestSnapshot = snapshot
                     } finally {
-                        frame.recycle()
+                        frameBitmap.recycle()
                     }
+                } else if (active != null) {
+                    active = active.copy(
+                        trackVisuals = predicted.visuals,
+                        trackCount = predicted.trackCount,
+                        hud = latestHud,
+                        gasDetected = latestZone.detected,
+                        safeZoneX = latestZone.x,
+                        safeZoneY = latestZone.y
+                    )
                 }
 
-                val active = snapshot
                 if (active != null) {
-                    // The normal predictive dodge updates on fresh YOLO detections.
-                    // The emergency projectile path can interrupt on any screen frame.
-                    if (runYolo || projectileThreat?.urgent == true) {
+                    val visibleTracks = predicted.visible
+
+                    val warning = alertEngine.update(
+                        active.player,
+                        visibleTracks,
+                        latestHud,
+                        latestZone,
+                        config,
+                        now,
+                        config.showWarnings,
+                        safeZoneEnabled
+                    )
+
+                    if (warning.type != lastWarning) {
+                        if (warning.type != WarningType.NONE) vibrateBriefly()
+                        lastWarning = warning.type
+                    }
+
+                    val captureDelayMs = (
+                        (System.nanoTime() - currentImage.timestamp) / 1_000_000L
+                    ).coerceAtLeast(0L)
+
+                    val debug = String.format(
+                        Locale.US,
+                        "delay %dms • infer %dms • fps %.1f • tracks %d • %s",
+                        captureDelayMs,
+                        latestInferenceMs,
+                        latestFps,
+                        predicted.trackCount,
+                        if (::entityDetector.isInitialized) entityDetector.backend else "INIT"
+                    )
+
+                    active = active.copy(
+                        warning = warning,
+                        trackVisuals = if (runYolo) active.trackVisuals else predicted.visuals,
+                        trackCount = predicted.trackCount,
+                        projectileDetected = false,
+                        projectileThreat = 0f,
+                        projectileEtaMs = 0,
+                        debugText = debug
+                    )
+
+                    latestSnapshot = active
+
+                    if (runYolo || now - lastRenderAt >= 120L) {
+                        lastRenderAt = now
+                        val displayFrame = active
+                        mainHandler.post {
+                            overlay?.submit(displayFrame)
+                        }
+                    }
+
+                    if (config.autoDodge && runYolo) {
                         val dodge = dodgeBrain.decide(
                             active.player,
-                            active.enemies,
+                            visibleTracks,
                             now,
                             config,
-                            projectileThreat
+                            null
                         )
 
-                        if (dodge.shouldDodge && config.autoDodge) {
+                        if (dodge.shouldDodge) {
                             val controller = DodgeAccessibilityService.instance
                             if (controller != null) {
                                 mainHandler.postAtFrontOfQueue {
@@ -368,25 +486,24 @@ class ScreenBrainService : Service() {
                             }
                         }
                     }
-
-                    // HUD updates stay on YOLO cadence to avoid visual jitter.
-                    // An urgent projectile event is pushed immediately.
-                    if (runYolo || projectileThreat?.urgent == true) {
-                        val displayFrame = active.copy(
-                            projectileThreat = projectileThreat?.score ?: 0f,
-                            projectileEtaMs = projectileThreat?.etaMs ?: 0,
-                            projectileDetected = projectileThreat?.detected == true
-                        )
-                        mainHandler.post {
-                            overlay?.submit(displayFrame)
-                        }
-                    }
                 }
             }
         } catch (_: Throwable) {
-            // One malformed capture must never kill the real-time service.
+            // A malformed frame must never kill the real-time service.
         } finally {
             busy.set(false)
+        }
+    }
+
+    private fun vibrateBriefly() {
+        try {
+            if (Build.VERSION.SDK_INT >= 26) {
+                vibrator.vibrate(VibrationEffect.createOneShot(42L, 80))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(42L)
+            }
+        } catch (_: Throwable) {
         }
     }
 
@@ -426,6 +543,7 @@ class ScreenBrainService : Service() {
         try { if (::entityDetector.isInitialized) entityDetector.close() } catch (_: Throwable) {}
         try { if (::wallDetector.isInitialized) wallDetector.close() } catch (_: Throwable) {}
 
+        try { enemyTracker.reset() } catch (_: Throwable) {}
         try { worker.quitSafely() } catch (_: Throwable) {}
 
         super.onDestroy()
