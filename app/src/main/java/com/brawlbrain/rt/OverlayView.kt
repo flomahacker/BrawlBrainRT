@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.*
 import android.os.SystemClock
 import android.view.View
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -289,13 +290,17 @@ class OverlayView(context: Context) : View(context) {
         arrowPath.reset()
         val head = 17f * scale
         arrowPath.moveTo(ex, ey)
+        val cosLeft = cos(angle - 0.58f).toFloat()
+        val sinLeft = sin(angle - 0.58f).toFloat()
+        val cosRight = cos(angle + 0.58f).toFloat()
+        val sinRight = sin(angle + 0.58f).toFloat()
         arrowPath.lineTo(
-            ex - cos(angle - 0.58f) * head,
-            ey - sin(angle - 0.58f) * head
+            ex - cosLeft * head,
+            ey - sinLeft * head
         )
         arrowPath.lineTo(
-            ex - cos(angle + 0.58f) * head,
-            ey - sin(angle + 0.58f) * head
+            ex - cosRight * head,
+            ey - sinRight * head
         )
         arrowPath.close()
 
