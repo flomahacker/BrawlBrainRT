@@ -18,7 +18,8 @@ data class BrainConfig(
     val showThreat: Boolean = true,
     val showAdvice: Boolean = true,
     val showDebug: Boolean = true,
-    val reducedMotion: Boolean = true
+    val reducedMotion: Boolean = true,
+    val frameLongEdge: Int = 960
 )
 
 object BrainPrefs {
@@ -42,12 +43,30 @@ object BrainPrefs {
 
     fun load(context: Context): BrainConfig {
         val p = context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
+        val performance = p.getString(PERFORMANCE, "Balanced") ?: "Balanced"
+
+        val defaultEntity = when (performance) {
+            "Battery Saver" -> 190L
+            "Quality" -> 90L
+            else -> 125L
+        }
+        val defaultWall = when (performance) {
+            "Battery Saver" -> 1100L
+            "Quality" -> 450L
+            else -> 600L
+        }
+        val defaultEdge = when (performance) {
+            "Battery Saver" -> 768
+            "Quality" -> 1280
+            else -> 960
+        }
+
         return BrainConfig(
             gameMode = p.getString(MODE, "Universal") ?: "Universal",
             role = p.getString(ROLE, "Universal") ?: "Universal",
-            performance = p.getString(PERFORMANCE, "Balanced") ?: "Balanced",
-            entityIntervalMs = p.getLong(ENTITY_INTERVAL, 125L),
-            wallIntervalMs = p.getLong(WALL_INTERVAL, 600L),
+            performance = performance,
+            entityIntervalMs = p.getLong(ENTITY_INTERVAL, defaultEntity),
+            wallIntervalMs = p.getLong(WALL_INTERVAL, defaultWall),
             confidencePercent = p.getInt(CONFIDENCE, 34),
             hudOpacityPercent = p.getInt(HUD_OPACITY, 88),
             hudScalePercent = p.getInt(HUD_SCALE, 100),
@@ -58,7 +77,8 @@ object BrainPrefs {
             showThreat = p.getBoolean(SHOW_THREAT, true),
             showAdvice = p.getBoolean(SHOW_ADVICE, true),
             showDebug = p.getBoolean(SHOW_DEBUG, true),
-            reducedMotion = p.getBoolean(REDUCED_MOTION, true)
+            reducedMotion = p.getBoolean(REDUCED_MOTION, true),
+            frameLongEdge = defaultEdge
         )
     }
 
