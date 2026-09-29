@@ -1,9 +1,11 @@
 package com.brawlbrain.rt
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.*
@@ -27,8 +29,11 @@ class InGameControl(
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
             background = bg(0xEE121722.toInt(), 20)
-            setOnClickListener { toggle() }
+            setOnClickListener {
+                if (panel == null) openPanel() else closePanel()
+            }
         }
+
         val lp = WindowManager.LayoutParams(
             dp(54), dp(54),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -42,16 +47,13 @@ class InGameControl(
         wm.addView(button, lp)
     }
 
-    private fun toggle() {
-        if (panel == null) openPanel() else closePanel()
-    }
-
     private fun openPanel() {
         val cfg = BrainPrefs.load(context)
+
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = bg(0xF2141822.toInt(), 20)
+            setPadding(dp(15), dp(13), dp(15), dp(13))
+            background = bg(0xF3151A24.toInt(), 22)
         }
 
         root.addView(TextView(context).apply {
@@ -60,58 +62,103 @@ class InGameControl(
             setTextColor(Color.WHITE)
         })
 
+        root.addView(TextView(context).apply {
+            text = "Только движение • атака не используется"
+            textSize = 11f
+            setTextColor(0xFF8795AF.toInt())
+            setPadding(0, dp(2), 0, dp(8))
+        })
+
         val brawler = Spinner(context)
         val brawlers = arrayOf("Buzz", "Tick")
-        brawler.adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, brawlers)
+        brawler.adapter = ArrayAdapter(
+            context,
+            android.R.layout.simple_spinner_dropdown_item,
+            brawlers
+        )
         brawler.setSelection(if (cfg.brawler == "Tick") 1 else 0)
-        root.addView(label("Боец", brawler))
+        root.addView(label("БОЕЦ", brawler))
 
-        val advice = Switch(context).apply {
-            text = "Тактика"
+        val dodge = Switch(context).apply {
+            text = "DODGE ONLY"
+            textSize = 15f
             setTextColor(Color.WHITE)
-            isChecked = cfg.showAdvice
+            isChecked = cfg.autoDodge
         }
+        root.addView(dodge)
+
+        val strengthText = TextView(context).apply {
+            textSize = 12f
+            setTextColor(0xFF7F8CA5.toInt())
+        }
+        val strength = SeekBar(context).apply {
+            max = 65
+            progress = (cfg.dodgeStrengthPercent - 35).coerceIn(0, 65)
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                    strengthText.text = "Сила манса: \${35 + p}%"
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) = Unit
+                override fun onStopTrackingTouch(s: SeekBar?) = Unit
+            })
+        }
+        strengthText.text = "Сила манса: \${cfg.dodgeStrengthPercent}%"
+        root.addView(strengthText)
+        root.addView(strength)
+
         val target = Switch(context).apply {
             text = "Приоритетная цель"
             setTextColor(Color.WHITE)
             isChecked = cfg.showTargetLine
         }
+        root.addView(target)
+
         val enemies = Switch(context).apply {
             text = "Метки врагов"
             setTextColor(Color.WHITE)
             isChecked = cfg.showEnemies
         }
-        root.addView(advice)
-        root.addView(target)
         root.addView(enemies)
 
         root.addView(Button(context).apply {
             text = "ПРИМЕНИТЬ"
             setTextColor(Color.WHITE)
-            background = bg(0xFF5B80FF.toInt(), 16)
+            background = bg(0xFF5B80FF.toInt(), 17)
             setOnClickListener {
                 val updated = cfg.copy(
                     brawler = brawler.selectedItem.toString(),
-                    showAdvice = advice.isChecked,
+                    autoDodge = dodge.isChecked,
+                    dodgeStrengthPercent = 35 + strength.progress,
                     showTargetLine = target.isChecked,
                     showEnemies = enemies.isChecked
                 )
+
                 BrainPrefs.save(context, updated)
                 onChanged(updated)
+
+                if (updated.autoDodge && DodgeAccessibilityService.instance == null) {
+                    try {
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (_: Throwable) {}
+                    Toast.makeText(context, "Включи BrawlBrain Dodge в Спец. возможностях", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(context, if (updated.autoDodge) "Dodge Only включён" else "Dodge Only выключен", Toast.LENGTH_SHORT).show()
+                }
                 closePanel()
             }
         })
 
         root.addView(Button(context).apply {
             text = "ЗАКРЫТЬ"
-            setTextColor(0xFFB9C3D6.toInt())
-            background = bg(0xFF202633.toInt(), 16)
+            setTextColor(0xFFBAC4D7.toInt())
+            background = bg(0xFF202633.toInt(), 17)
             setOnClickListener { closePanel() }
         })
 
         panel = root
+
         val lp = WindowManager.LayoutParams(
-            dp(300), dp(390),
+            dp(310), dp(470),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
@@ -120,27 +167,32 @@ class InGameControl(
             x = dp(10)
             y = dp(114)
         }
+
         wm.addView(root, lp)
     }
 
     private fun closePanel() {
-        panel?.let { try { wm.removeView(it) } catch (_: Throwable) {} }
+        panel?.let {
+            try { wm.removeView(it) } catch (_: Throwable) {}
+        }
         panel = null
     }
 
     fun hide() {
         closePanel()
-        button?.let { try { wm.removeView(it) } catch (_: Throwable) {} }
+        button?.let {
+            try { wm.removeView(it) } catch (_: Throwable) {}
+        }
         button = null
     }
 
-    private fun label(title: String, spinner: Spinner): LinearLayout {
+    private fun label(text: String, spinner: Spinner): LinearLayout {
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             addView(TextView(context).apply {
-                text = title
-                textSize = 11f
-                setTextColor(0xFF727E95.toInt())
+                this.text = text
+                textSize = 10f
+                setTextColor(0xFF6F7B92.toInt())
             })
             addView(spinner)
         }
