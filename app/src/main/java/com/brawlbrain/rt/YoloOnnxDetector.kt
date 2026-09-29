@@ -1,6 +1,5 @@
 package com.brawlbrain.rt
 
-import ai.onnxruntime.GraphOptimizationLevel
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
@@ -39,7 +38,7 @@ class YoloOnnxDetector(
         val optimized = OrtSession.SessionOptions()
         optimized.setIntraOpNumThreads(2)
         optimized.setInterOpNumThreads(1)
-        optimized.setGraphOptimizationLevel(GraphOptimizationLevel.ORT_ENABLE_ALL)
+        optimized.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
 
         if (Build.VERSION.SDK_INT >= 27) {
             try {
@@ -53,7 +52,7 @@ class YoloOnnxDetector(
         val cpu = OrtSession.SessionOptions()
         cpu.setIntraOpNumThreads(3)
         cpu.setInterOpNumThreads(1)
-        cpu.setGraphOptimizationLevel(GraphOptimizationLevel.ORT_ENABLE_ALL)
+        cpu.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
         return env.createSession(modelBytes, cpu)
     }
 
