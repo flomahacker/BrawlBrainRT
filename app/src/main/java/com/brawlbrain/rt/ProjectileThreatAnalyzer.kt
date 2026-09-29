@@ -43,19 +43,23 @@ class ProjectileThreatAnalyzer {
         enemies: List<Detection>,
         now: Long
     ): ProjectileThreat? {
-        if (player == null || enemies.isEmpty()) {
-            previous = buildGray(image, captureW, captureH)
-            pruneTracks(now)
-            return null
-        }
-
         val current = buildGray(image, captureW, captureH)
         val old = previous
         previous = current
 
-        if (old == null) return null
+        if (player == null || enemies.isEmpty() || old == null) {
+            pruneTracks(now)
+            return null
+        }
 
         pruneTracks(now)
+
+        val globalMotion = globalMotion(current, old)
+        val globalFactor = when {
+            globalMotion >= 0.55f -> 0.46f
+            globalMotion >= 0.38f -> 0.68f
+            else -> 1f
+        }
 
         var best: ProjectileThreat? = null
 
@@ -69,22 +73,22 @@ class ProjectileThreatAnalyzer {
             .forEach { enemy ->
                 val lineX = player.cx - enemy.cx
                 val lineY = player.cy - enemy.cy
-                val lineLen = hypot(lineX, lineY).coerceAtLeast(0.001f)
-                val ux = lineX / lineLen
-                val uy = lineY / lineLen
-                val nx = -uy
-                val ny = ux
 
                 val energies = FloatArray(13)
                 var peak = 0f
                 var peakIndex = 0
-                var weighted = 0f
-                var total = 0f
+                var totalEnergy = 0f
+                var directionalEnergy = 0f
+                var weightedT = 0f
 
                 for (i in energies.indices) {
                     val t = 0.15f + (0.72f * i / 12f)
                     val bx = enemy.cx + lineX * t
                     val by = enemy.cy + lineY * t
+
+                    val len = hypot(lineX, lineY).coerceAtLeast(0.001f)
+                    val nx = -lineY / len
+                    val ny = lineX / len
 
                     val center = motionAt(current, old, bx, by)
                     val sideA = motionAt(
@@ -106,12 +110,38 @@ class ProjectileThreatAnalyzer {
                         peakIndex = i
                     }
 
-                    total += energy
-                    weighted += t * energy
+                    totalEnergy += energy
+                    weightedT += t * energy
+
+                    // A shot travelling toward the player should look more like
+                    // its previous-frame position just behind it than the position
+                    // it would have occupied farther toward the player.
+                    val stepX = lineX * 0.075f
+                    val stepY = lineY * 0.075f
+                    val forwardSimilarity = patchSimilarity(
+                        current, old,
+                        bx, by,
+                        bx - stepX, by - stepY
+                    )
+                    val backwardSimilarity = patchSimilarity(
+                        current, old,
+                        bx, by,
+                        bx + stepX, by + stepY
+                    )
+
+                    val directed = (
+                        (forwardSimilarity - backwardSimilarity)
+                            .coerceAtLeast(0f) * energy
+                    )
+                    directionalEnergy += directed
                 }
 
                 val peakT = 0.15f + (0.72f * peakIndex / 12f)
-                val meanT = if (total > 0.001f) weighted / total else peakT
+                val meanT = if (totalEnergy > 0.001f) {
+                    weightedT / totalEnergy
+                } else {
+                    peakT
+                }
 
                 var playerBand = 0f
                 var playerCount = 0
@@ -132,29 +162,42 @@ class ProjectileThreatAnalyzer {
                 playerBand /= max(1, playerCount).toFloat()
                 enemyBand /= max(1, enemyCount).toFloat()
 
+                val directionScore = if (totalEnergy > 0.001f) {
+                    (directionalEnergy / totalEnergy).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+
                 val track = findTrack(enemy)
-                val hasHistory = track.lastPeakAt > 0L && now - track.lastPeakAt <= 190L
+                val hasHistory =
+                    track.lastPeakAt > 0L && now - track.lastPeakAt <= 190L
                 val shift = if (hasHistory) peakT - track.lastPeakT else 0f
-                val towardPlayer = if (hasHistory) {
+                val trackAdvance = if (hasHistory) {
                     (shift / 0.16f).coerceIn(0f, 1f)
-                } else 0f
+                } else {
+                    0f
+                }
+
+                val advanceScore = max(directionScore, trackAdvance)
+                val effectivePeak = peak * globalFactor
+                val effectivePlayerBand = playerBand * globalFactor
 
                 val corridorScore = (
-                    peak * 0.50f +
-                    playerBand * 0.18f +
-                    towardPlayer * 0.32f
+                    effectivePeak * 0.46f +
+                    effectivePlayerBand * 0.16f +
+                    advanceScore * 0.38f
                 ).coerceIn(0f, 1f)
 
-                val detected = peak >= 0.24f && (
-                    towardPlayer >= 0.30f ||
-                    playerBand >= 0.33f ||
-                    (enemyBand >= 0.42f && peak >= 0.48f)
+                val detected = effectivePeak >= 0.20f && (
+                    advanceScore >= 0.26f ||
+                    effectivePlayerBand >= 0.28f ||
+                    (enemyBand * globalFactor >= 0.40f && effectivePeak >= 0.44f)
                 )
 
-                val urgent = peak >= 0.30f && (
-                    towardPlayer >= 0.50f ||
-                    playerBand >= 0.46f ||
-                    (peakT >= 0.62f && peak >= 0.42f)
+                val urgent = effectivePeak >= 0.27f && (
+                    advanceScore >= 0.40f ||
+                    effectivePlayerBand >= 0.40f ||
+                    (peakT >= 0.62f && effectivePeak >= 0.38f)
                 )
 
                 track.x = enemy.cx
@@ -164,8 +207,8 @@ class ProjectileThreatAnalyzer {
 
                 if (detected) {
                     val eta = (
-                        ((1f - meanT).coerceIn(0.10f, 0.92f) * 360f) +
-                            if (urgent) 35f else 80f
+                        ((1f - meanT).coerceIn(0.10f, 0.92f) * 350f) +
+                            if (urgent) 30f else 85f
                     ).toInt().coerceIn(45, 420)
 
                     val threat = ProjectileThreat(
@@ -174,7 +217,11 @@ class ProjectileThreatAnalyzer {
                         score = corridorScore,
                         etaMs = eta,
                         enemy = enemy,
-                        reason = if (urgent) "PROJECTILE • DANGER" else "PROJECTILE? • TRACK"
+                        reason = if (urgent) {
+                            "PROJECTILE • DANGER"
+                        } else {
+                            "PROJECTILE? • TRACK"
+                        }
                     )
 
                     if (best == null || threat.score > best!!.score) {
@@ -230,6 +277,63 @@ class ProjectileThreatAnalyzer {
                 total += abs(current[i].toInt() - old[i].toInt())
                 count++
             }
+        }
+
+        return (total / max(1, count)).toFloat() / 54f
+    }
+
+    private fun patchSimilarity(
+        current: ByteArray,
+        old: ByteArray,
+        currentX: Float,
+        currentY: Float,
+        oldX: Float,
+        oldY: Float
+    ): Float {
+        val cx = (currentX.coerceIn(0f, 0.999f) * gridW).toInt()
+        val cy = (currentY.coerceIn(0f, 0.999f) * gridH).toInt()
+        val ox = (oldX.coerceIn(0f, 0.999f) * gridW).toInt()
+        val oy = (oldY.coerceIn(0f, 0.999f) * gridH).toInt()
+
+        var total = 0
+        var count = 0
+
+        for (dy in -1..1) {
+            for (dx in -1..1) {
+                val cxx = (cx + dx).coerceIn(0, gridW - 1)
+                val cyy = (cy + dy).coerceIn(0, gridH - 1)
+                val oxx = (ox + dx).coerceIn(0, gridW - 1)
+                val oyy = (oy + dy).coerceIn(0, gridH - 1)
+
+                total += abs(
+                    current[cyy * gridW + cxx].toInt() -
+                        old[oyy * gridW + oxx].toInt()
+                )
+                count++
+            }
+        }
+
+        val difference = total / max(1, count).toFloat()
+        return (1f - difference / 72f).coerceIn(0f, 1f)
+    }
+
+    private fun globalMotion(
+        current: ByteArray,
+        old: ByteArray
+    ): Float {
+        var total = 0
+        var count = 0
+        var y = 0
+
+        while (y < gridH) {
+            var x = 0
+            while (x < gridW) {
+                val i = y * gridW + x
+                total += abs(current[i].toInt() - old[i].toInt())
+                count++
+                x += 6
+            }
+            y += 6
         }
 
         return (total / max(1, count)).toFloat() / 54f
