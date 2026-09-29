@@ -4,6 +4,8 @@ import android.app.*
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -155,25 +157,30 @@ class ScreenBrainService : Service() {
         )
 
         val dm = resources.displayMetrics
-        val fullW = dm.widthPixels
-        val fullH = dm.heightPixels
+        val screenW = dm.widthPixels
+        val screenH = dm.heightPixels
+
+        val longEdge = minOf(config.frameLongEdge, maxOf(screenW, screenH))
+        val scale = longEdge.toFloat() / maxOf(screenW, screenH).toFloat()
+        val captureW = maxOf(2, (screenW * scale).toInt() and -2)
+        val captureH = maxOf(2, (screenH * scale).toInt() and -2)
 
         reader = ImageReader.newInstance(
-            fullW,
-            fullH,
+            captureW,
+            captureH,
             PixelFormat.RGBA_8888,
             2
         )
 
         reader.setOnImageAvailableListener(
-            { ir -> consumeLatest(ir, fullW, fullH) },
+            { ir -> consumeLatest(ir, captureW, captureH) },
             workerHandler
         )
 
         display = projection.createVirtualDisplay(
             "BrawlBrainRT",
-            fullW,
-            fullH,
+            captureW,
+            captureH,
             dm.densityDpi,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             reader.surface,
@@ -182,7 +189,7 @@ class ScreenBrainService : Service() {
         )
     }
 
-    private fun consumeLatest(ir: ImageReader, fullW: Int, fullH: Int) {
+    private fun consumeLatest(ir: ImageReader, captureW: Int, captureH: Int) {
         val now = SystemClock.elapsedRealtime()
 
         if (!busy.compareAndSet(false, true)) {
@@ -191,8 +198,8 @@ class ScreenBrainService : Service() {
         }
 
         if (now - lastEntityAt < config.entityIntervalMs) {
-            busy.set(false)
             ir.acquireLatestImage()?.close()
+            busy.set(false)
             return
         }
 
@@ -210,28 +217,29 @@ class ScreenBrainService : Service() {
                 val buffer: ByteBuffer = plane.buffer
                 val pixelStride = plane.pixelStride
                 val rowStride = plane.rowStride
-                val rowPadding = rowStride - pixelStride * fullW
-                val rawWidth = fullW + rowPadding / pixelStride.coerceAtLeast(1)
+                val rowPadding = rowStride - pixelStride * captureW
+                val rawWidth = captureW + rowPadding / pixelStride.coerceAtLeast(1)
 
                 val raw = Bitmap.createBitmap(
                     rawWidth,
-                    fullH,
+                    captureH,
                     Bitmap.Config.ARGB_8888
                 )
                 raw.copyPixelsFromBuffer(buffer)
 
-                val targetWidth = minOf(config.frameLongEdge, rawWidth)
-                val targetHeight = (fullH * targetWidth.toFloat() / rawWidth)
-                    .toInt()
-                    .coerceAtLeast(1)
-
-                val frame = Bitmap.createScaledBitmap(
-                    raw,
-                    targetWidth,
-                    targetHeight,
-                    true
-                )
-                raw.recycle()
+                val frame =
+                    if (rawWidth == captureW) {
+                        raw
+                    } else {
+                        val cropped = Bitmap.createBitmap(
+                            captureW,
+                            captureH,
+                            Bitmap.Config.ARGB_8888
+                        )
+                        Canvas(cropped).drawBitmap(raw, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG))
+                        raw.recycle()
+                        cropped
+                    }
 
                 val t0 = SystemClock.elapsedRealtime()
 
@@ -245,11 +253,9 @@ class ScreenBrainService : Service() {
 
                 val t1 = SystemClock.elapsedRealtime()
                 latestInferenceMs = t1 - t0
-
                 latestFps =
                     if (lastInferenceAt == 0L) 0f
                     else 1000f / (t1 - lastInferenceAt).coerceAtLeast(1L)
-
                 lastInferenceAt = t1
 
                 val snapshot = brain.decide(
@@ -268,7 +274,7 @@ class ScreenBrainService : Service() {
                 frame.recycle()
             }
         } catch (_: Throwable) {
-            // One bad frame must not kill the vision loop.
+            // One bad frame must not terminate real-time vision.
         } finally {
             busy.set(false)
         }
