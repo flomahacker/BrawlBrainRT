@@ -43,10 +43,11 @@ class OverlayView(context: Context) : View(context) {
 
     fun submit(next: BrainFrame) {
         val signature = visualSignature(next)
+        val wasSuperReady = frame.hud.superReady
         frame = next
         if (signature != lastRenderSignature) {
             lastRenderSignature = signature
-            if (next.hud.superReady && !frame.hud.superReady) {
+            if (next.hud.superReady && !wasSuperReady) {
                 pulseUntil = SystemClock.elapsedRealtime() + 700L
             }
             invalidate()
@@ -183,14 +184,7 @@ class OverlayView(context: Context) : View(context) {
         text.textSize = 9f * scale
         text.typeface = Typeface.DEFAULT
         text.color = withAlpha(WHITE, 150)
-
-        // ID is rendered from a small fixed lookup to avoid allocations.
-        val label = when (id) {
-            1 -> "1"; 2 -> "2"; 3 -> "3"; 4 -> "4"; 5 -> "5"
-            6 -> "6"; 7 -> "7"; 8 -> "8"; 9 -> "9"; 10 -> "10"
-            else -> "•"
-        }
-        canvas.drawText("#$label", x - 12f * scale, y + 39f * scale, text)
+        canvas.drawText(frame.trackVisuals.firstOrNull { it.id == id }?.idText ?: "#", x - 12f * scale, y + 39f * scale, text)
     }
 
     private fun drawPlayerRange(canvas: Canvas, scale: Float) {
@@ -273,9 +267,6 @@ class OverlayView(context: Context) : View(context) {
         val cx: Float
         val cy: Float
 
-        val tx = 0.5f + ux * 0.55f
-        val ty = 0.5f + uy * 0.55f
-
         if (abs(ux) > abs(uy)) {
             cx = if (ux >= 0f) width - edgePadding else edgePadding
             cy = (height * (0.5f + uy * 0.30f)).coerceIn(edgePadding, height - edgePadding)
@@ -312,8 +303,6 @@ class OverlayView(context: Context) : View(context) {
         fill.color = color
         canvas.drawPath(arrowPath, fill)
 
-        // tx/ty deliberately unused visually; they anchor the semantic edge direction.
-        if (tx + ty < -100f) return
     }
 
     private fun drawSuperReady(canvas: Canvas, scale: Float) {
