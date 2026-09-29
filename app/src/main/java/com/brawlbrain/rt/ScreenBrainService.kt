@@ -45,6 +45,7 @@ class ScreenBrainService : Service() {
     private lateinit var entityDetector: YoloOnnxDetector
     private lateinit var wallDetector: YoloOnnxDetector
     private val brain = TacticalBrain()
+    private val dodgeBrain = DodgeBrain()
 
     private val busy = AtomicBoolean(false)
     private var lastEntityAt = 0L
@@ -282,6 +283,26 @@ class ScreenBrainService : Service() {
                     "YOLOv11",
                     config
                 )
+
+                val dodge = dodgeBrain.decide(
+                    snapshot.player,
+                    snapshot.enemies,
+                    t1,
+                    config
+                )
+
+                if (dodge.shouldDodge) {
+                    val controller = DodgeAccessibilityService.instance
+                    if (controller != null) {
+                        mainHandler.post {
+                            controller.dodge(
+                                dodge.x,
+                                dodge.y,
+                                config.dodgeStrengthPercent / 100f
+                            )
+                        }
+                    }
+                }
 
                 mainHandler.post {
                     overlay?.submit(snapshot)
