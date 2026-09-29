@@ -31,6 +31,10 @@ data class BrainConfig(
     val ghostTtlMs: Long = 5000L,
     val predictionLeadMs: Long = 380L,
     val pipelineDelayMs: Long = 80L,
+    val trackerMaxTracks: Int = 10,
+    val trackerMatchDistance: Float = 0.14f,
+    val trackerMinIou: Float = 0.04f,
+    val trackerVisibleGraceMs: Long = 150L,
     val predictionMaxSeconds: Float = 0.55f,
     val showPrediction: Boolean = true,
 
@@ -99,6 +103,10 @@ object BrainPrefs {
     private const val SHOW_GHOSTS = "show_ghosts"
     private const val SHOW_PREDICTION = "show_prediction"
     private const val PIPELINE_DELAY = "pipeline_delay"
+    private const val TRACKER_MAX = "tracker_max"
+    private const val TRACKER_MATCH = "tracker_match"
+    private const val TRACKER_IOU = "tracker_iou"
+    private const val TRACKER_GRACE = "tracker_grace"
     private const val SHOW_RANGE_RINGS = "show_range_rings"
     private const val SHOW_ENEMY_RANGE_RINGS = "show_enemy_range_rings"
     private const val RANGE_SCALE = "range_scale"
@@ -161,6 +169,10 @@ object BrainPrefs {
             showGhosts = p.getBoolean(SHOW_GHOSTS, true),
             predictionLeadMs = p.getLong("prediction_lead", 380L).coerceIn(300L, 500L),
             pipelineDelayMs = p.getLong(PIPELINE_DELAY, 80L).coerceIn(0L, 180L),
+            trackerMaxTracks = p.getInt(TRACKER_MAX, 10).coerceIn(3, 10),
+            trackerMatchDistance = p.getFloat(TRACKER_MATCH, 0.14f).coerceIn(0.05f, 0.25f),
+            trackerMinIou = p.getFloat(TRACKER_IOU, 0.04f).coerceIn(0.0f, 0.30f),
+            trackerVisibleGraceMs = p.getLong(TRACKER_GRACE, 150L).coerceIn(80L, 300L),
             showPrediction = p.getBoolean(SHOW_PREDICTION, true),
             showRangeRings = p.getBoolean(SHOW_RANGE_RINGS, true),
             showEnemyRangeRings = p.getBoolean(SHOW_ENEMY_RANGE_RINGS, false),
@@ -207,6 +219,10 @@ object BrainPrefs {
             .putBoolean(SHOW_GHOSTS, config.showGhosts)
             .putLong("prediction_lead", config.predictionLeadMs.coerceIn(300L, 500L))
             .putLong(PIPELINE_DELAY, config.pipelineDelayMs.coerceIn(0L, 180L))
+            .putInt(TRACKER_MAX, config.trackerMaxTracks.coerceIn(3, 10))
+            .putFloat(TRACKER_MATCH, config.trackerMatchDistance.coerceIn(0.05f, 0.25f))
+            .putFloat(TRACKER_IOU, config.trackerMinIou.coerceIn(0.0f, 0.30f))
+            .putLong(TRACKER_GRACE, config.trackerVisibleGraceMs.coerceIn(80L, 300L))
             .putBoolean(SHOW_PREDICTION, config.showPrediction)
             .putBoolean(SHOW_RANGE_RINGS, config.showRangeRings)
             .putBoolean(SHOW_ENEMY_RANGE_RINGS, config.showEnemyRangeRings)
