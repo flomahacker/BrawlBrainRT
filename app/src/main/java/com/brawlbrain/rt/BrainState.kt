@@ -30,7 +30,10 @@ data class BrainFrame(
     val inferenceMs: Long,
     val engine: String,
     val gameMode: String,
-    val role: String
+    val role: String,
+    val projectileThreat: Float = 0f,
+    val projectileEtaMs: Int = 0,
+    val projectileDetected: Boolean = false
 )
 
 enum class Recommendation(val title: String) {
