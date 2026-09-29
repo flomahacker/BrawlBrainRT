@@ -204,7 +204,12 @@ class DetectionTracker(
                 confidence = track.confidence.coerceIn(0f, 1f),
                 visible = isVisible,
                 ageMs = ageMs,
-                ageText = "\${(ageMs / 1000L).coerceIn(0L, 5L)}s"
+                ageText = "\${(ageMs / 1000L).coerceIn(0L, 5L)}s",
+                idText = when (track.id) {
+                    1 -> "#1"; 2 -> "#2"; 3 -> "#3"; 4 -> "#4"; 5 -> "#5"
+                    6 -> "#6"; 7 -> "#7"; 8 -> "#8"; 9 -> "#9"; 10 -> "#10"
+                    else -> "#"
+                }
             )
         }
 
