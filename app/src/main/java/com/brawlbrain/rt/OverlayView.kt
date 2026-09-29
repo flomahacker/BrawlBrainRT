@@ -116,12 +116,24 @@ class OverlayView(context: Context) : View(context) {
 
         if (config.showDebug) {
             canvas.drawText(
+        if (config.showDebug) {
+            canvas.drawText(
                 "Vision " + String.format(Locale.US, "%.1f", frame.fps) +
-                    " FPS • ${frame.inferenceMs}ms • ${frame.engine}",
+                    " FPS • " + frame.inferenceMs + "ms • " + frame.engine,
                 54f,
                 158f,
                 smallPaint
             )
+        }
+
+        if (config.autoDodge) {
+            val dodgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0xFF8FD3FF.toInt()
+                textSize = 14f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            canvas.drawText("DODGE ONLY • ON", 54f, 184f, dodgePaint)
+        }
         }
     }
 
