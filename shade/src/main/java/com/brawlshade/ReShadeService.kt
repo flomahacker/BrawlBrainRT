@@ -79,6 +79,9 @@ class ReShadeService : Service() {
             }
         }, null)
 
+        // The GLSurfaceView can become ready before MediaProjection. Try again now.
+        setupVirtualDisplay()
+
         return START_STICKY
     }
 
