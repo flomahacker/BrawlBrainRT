@@ -56,17 +56,17 @@ object BrainPrefs {
         val performance = p.getString(PERFORMANCE, "12X Smooth") ?: "12X Smooth"
 
         val defaultEntity = when (performance) {
-            "Battery" -> 220L
+            "Battery", "Battery Saver" -> 220L
             "Quality" -> 105L
             else -> 150L
         }
         val defaultWall = when (performance) {
-            "Battery" -> 1600L
+            "Battery", "Battery Saver" -> 1600L
             "Quality" -> 800L
             else -> 1200L
         }
         val defaultEdge = when (performance) {
-            "Battery" -> 576
+            "Battery", "Battery Saver" -> 576
             "Quality" -> 960
             else -> 720
         }
