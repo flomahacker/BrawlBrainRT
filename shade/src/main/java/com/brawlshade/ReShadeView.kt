@@ -45,6 +45,8 @@ class ReShadeView(
         private var inputTexture: SurfaceTexture? = null
         private var inputSurface: Surface? = null
         private val texTransform = FloatArray(16)
+        private var viewportWidth = 1
+        private var viewportHeight = 1
 
         private val verts: FloatBuffer = ByteBuffer.allocateDirect(4 * 4 * 4)
             .order(ByteOrder.nativeOrder())
@@ -76,7 +78,9 @@ class ReShadeView(
             width: Int,
             height: Int
         ) {
-            GLES20.glViewport(0, 0, width, height)
+            viewportWidth = width.coerceAtLeast(1)
+            viewportHeight = height.coerceAtLeast(1)
+            GLES20.glViewport(0, 0, viewportWidth, viewportHeight)
         }
 
         override fun onDrawFrame(gl: javax.microedition.khronos.opengles.GL10?) {
@@ -111,7 +115,7 @@ class ReShadeView(
 
             GLES20.glUniformMatrix4fv(mat, 1, false, texTransform, 0)
             GLES20.glUniform1f(timeLoc, (System.nanoTime() % 10000000000L) / 1000000000f)
-            GLES20.glUniform2f(resLoc, width.toFloat().coerceAtLeast(1f), height.toFloat().coerceAtLeast(1f))
+            GLES20.glUniform2f(resLoc, viewportWidth.toFloat(), viewportHeight.toFloat())
 
             bindFloats(program, state)
 
