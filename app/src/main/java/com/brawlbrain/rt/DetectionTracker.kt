@@ -69,6 +69,8 @@ class DetectionTracker {
         var confidence = confidence
         var lastSeenAt = now
         var lastUpdateAt = now
+        var lastSeenX = x
+        var lastSeenY = y
         var visible = true
 
         fun predict(now: Long) {
@@ -89,6 +91,8 @@ class DetectionTracker {
             width = width * 0.68f + d.width * 0.32f
             height = height * 0.68f + d.height * 0.32f
             confidence = confidence * 0.72f + d.confidence * 0.28f
+            lastSeenX = d.cx
+            lastSeenY = d.cy
             lastSeenAt = now
             lastUpdateAt = now
             visible = true
@@ -168,8 +172,8 @@ class DetectionTracker {
             val d = candidates[di]
             tracks += Track(
                 id = allocateId(),
-                x = d.cx,
-                y = d.cy,
+                x = visualX,
+                y = visualY,
                 width = d.width,
                 height = d.height,
                 confidence = d.confidence,
@@ -195,6 +199,8 @@ class DetectionTracker {
             val d = track.box()
             val ageMs = (now - track.lastSeenAt).coerceAtLeast(0L)
             val isVisible = track.visible && ageMs < visibleGraceMs
+            val visualX = if (isVisible) d.cx else track.lastSeenX
+            val visualY = if (isVisible) d.cy else track.lastSeenY
 
             if (isVisible) visible += d
 
