@@ -39,7 +39,9 @@ data class BrainFrame(
     val intelFocusX: Float = 0.5f,
     val intelFocusY: Float = 0.5f,
     val intelFocusScore: Float = 0f,
-    val fireWindow: Float = 0f
+    val fireWindow: Float = 0f,
+    val actionX: Float = 0f,
+    val actionY: Float = 0f
 )
 
 enum class Recommendation(val title: String) {
