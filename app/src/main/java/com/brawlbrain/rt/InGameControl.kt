@@ -15,15 +15,17 @@ class InGameControl(
     private val wm: WindowManager,
     private val onChanged: (BrainConfig) -> Unit
 ) {
-    private var button: TextView? = null
+    private var brainButton: TextView? = null
+    private var dodgeButton: TextView? = null
     private var panel: LinearLayout? = null
 
     private fun dp(v: Int): Int =
         (v * context.resources.displayMetrics.density).toInt()
 
     fun show() {
-        if (button != null) return
-        button = TextView(context).apply {
+        if (brainButton != null || dodgeButton != null) return
+
+        brainButton = TextView(context).apply {
             text = "🧠"
             textSize = 22f
             gravity = Gravity.CENTER
@@ -34,7 +36,7 @@ class InGameControl(
             }
         }
 
-        val lp = WindowManager.LayoutParams(
+        val brainLp = WindowManager.LayoutParams(
             dp(54), dp(54),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
@@ -44,7 +46,78 @@ class InGameControl(
             x = dp(10)
             y = dp(48)
         }
-        wm.addView(button, lp)
+        wm.addView(brainButton, brainLp)
+
+        // Independent one-tap switch for use during an active match.
+        dodgeButton = TextView(context).apply {
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(dp(7), 0, dp(7), 0)
+            setOnClickListener { toggleDodgeInstant() }
+        }
+
+        val dodgeLp = WindowManager.LayoutParams(
+            dp(82), dp(42),
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+            x = dp(10)
+            y = dp(108)
+        }
+        wm.addView(dodgeButton, dodgeLp)
+        refreshDodgeButton(BrainPrefs.load(context).autoDodge)
+    }
+
+    private fun toggleDodgeInstant() {
+        val current = BrainPrefs.load(context)
+        val enable = !current.autoDodge
+
+        if (enable && DodgeAccessibilityService.instance == null) {
+            try {
+                context.startActivity(
+                    Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            } catch (_: Throwable) {}
+            Toast.makeText(
+                context,
+                "Открой BrawlBrain Dodge в Спец. возможностях",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        val updated = current.copy(
+            autoDodge = enable,
+            dodgeStrengthPercent = current.dodgeStrengthPercent.coerceIn(35, 100),
+            dodgeReactionMs = current.dodgeReactionMs.coerceIn(45L, 250L),
+            dodgeCooldownMs = current.dodgeCooldownMs.coerceIn(60L, 260L)
+        )
+
+        BrainPrefs.save(context, updated)
+        onChanged(updated)
+        refreshDodgeButton(enable)
+
+        Toast.makeText(
+            context,
+            if (enable) "⚡ DODGE ON" else "DODGE OFF",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    private fun refreshDodgeButton(enabled: Boolean) {
+        dodgeButton?.apply {
+            text = if (enabled) "⚡ DODGE" else "DODGE"
+            background = if (enabled) {
+                bg(0xEE1D6B52.toInt(), 16)
+            } else {
+                bg(0xEE202633.toInt(), 16)
+            }
+        }
     }
 
     private fun openPanel() {
@@ -158,14 +231,14 @@ class InGameControl(
         panel = root
 
         val lp = WindowManager.LayoutParams(
-            dp(310), dp(470),
+            dp(310), dp(500),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.END
             x = dp(10)
-            y = dp(114)
+            y = dp(160)
         }
 
         wm.addView(root, lp)
@@ -180,10 +253,15 @@ class InGameControl(
 
     fun hide() {
         closePanel()
-        button?.let {
+        brainButton?.let {
             try { wm.removeView(it) } catch (_: Throwable) {}
         }
-        button = null
+        brainButton = null
+
+        dodgeButton?.let {
+            try { wm.removeView(it) } catch (_: Throwable) {}
+        }
+        dodgeButton = null
     }
 
     private fun label(text: String, spinner: Spinner): LinearLayout {
