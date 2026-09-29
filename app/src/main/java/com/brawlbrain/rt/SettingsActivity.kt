@@ -19,7 +19,6 @@ class SettingsActivity : Activity() {
     private lateinit var confidenceSeek: SeekBar
     private lateinit var opacitySeek: SeekBar
     private lateinit var scaleSeek: SeekBar
-
     private val toggles = LinkedHashMap<String, Switch>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -30,61 +29,56 @@ class SettingsActivity : Activity() {
     private fun render() {
         val cfg = BrainPrefs.load(this)
 
-        val scroll = ScrollView(this).apply {
-            setBackgroundColor(0xFF0A0C12.toInt())
-        }
-
+        val scroll = ScrollView(this).apply { setBackgroundColor(0xFF090B11.toInt()) }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(26, 34, 26, 42)
+            setPadding(26, 30, 26, 42)
         }
 
         root.addView(title("BRAWLBRAIN PRO"))
-        root.addView(body("Настрой мозг под свой стиль игры. Все параметры сохраняются на телефоне."))
+        root.addView(body("Глубокая настройка vision, HUD и тактического мозга. Профиль хранится локально."))
 
-        modeSpinner = spinner("РЕЖИМ", listOf(
+        addSection("БОЕВОЙ ПРОФИЛЬ")
+        modeSpinner = makeSpinner("Режим", listOf(
             "Universal", "Showdown", "Gem Grab", "Brawl Ball", "Knockout",
             "Wipeout", "Bounty", "Hot Zone", "Heist", "Paint Brawl", "Basket Brawl", "Duels"
         ), cfg.gameMode)
 
-        roleSpinner = spinner("АРХЕТИП БРАВЛЕРА", listOf(
+        roleSpinner = makeSpinner("Архетип", listOf(
             "Universal", "Shooter", "Assassin", "Tank", "Thrower", "Support"
         ), cfg.role)
 
-        performanceSpinner = spinner("ПРОФИЛЬ ПРОИЗВОДИТЕЛЬНОСТИ", listOf(
+        performanceSpinner = makeSpinner("Производительность", listOf(
             "Battery Saver", "Balanced", "Quality"
         ), cfg.performance)
 
-        addSection("МОЗГ")
-        addSpinner(modeSpinner)
-        addSpinner(roleSpinner)
-        addSpinner(performanceSpinner)
-
         addSection("VISION")
-        entitySeek = seek("Частота анализа врагов", 80, 220, cfg.entityIntervalMs.toInt(), " мс")
-        wallSeek = seek("Частота анализа стен/укрытий", 300, 1500, cfg.wallIntervalMs.toInt(), " мс")
-        confidenceSeek = seek("Порог уверенности", 20, 70, cfg.confidencePercent, "%")
+        entitySeek = addSeek("Интервал детектора врагов", 70, 240, cfg.entityIntervalMs.toInt(), " мс")
+        wallSeek = addSeek("Интервал стен/укрытий", 250, 1600, cfg.wallIntervalMs.toInt(), " мс")
+        confidenceSeek = addSeek("Порог уверенности", 20, 70, cfg.confidencePercent, "%")
 
         addSection("HUD")
-        opacitySeek = seek("Прозрачность HUD", 45, 100, cfg.hudOpacityPercent, "%")
-        scaleSeek = seek("Размер HUD", 75, 130, cfg.hudScalePercent, "%")
+        opacitySeek = addSeek("Прозрачность", 40, 100, cfg.hudOpacityPercent, "%")
+        scaleSeek = addSeek("Размер", 75, 130, cfg.hudScalePercent, "%")
 
         addSection("СЛОИ")
-        toggle("Показывать врагов", "enemy", cfg.showEnemies)
-        toggle("Показывать тиммейтов", "teammate", cfg.showTeammates)
-        toggle("Показывать стены/укрытия", "walls", cfg.showWalls)
-        toggle("Линия на приоритетную цель", "target", cfg.showTargetLine)
-        toggle("Кольцо угрозы", "threat", cfg.showThreat)
-        toggle("Главный тактический совет", "advice", cfg.showAdvice)
-        toggle("Диагностика FPS / latency", "debug", cfg.showDebug)
-        toggle("Минимум анимаций", "motion", cfg.reducedMotion)
+        addToggle("Показывать врагов", "enemy", cfg.showEnemies)
+        addToggle("Показывать тиммейтов", "teammate", cfg.showTeammates)
+        addToggle("Показывать стены/укрытия", "walls", cfg.showWalls)
+        addToggle("Линия приоритетной цели", "target", cfg.showTargetLine)
+        addToggle("Кольцо угрозы", "threat", cfg.showThreat)
+        addToggle("Главный совет", "advice", cfg.showAdvice)
+        addToggle("FPS / latency", "debug", cfg.showDebug)
+        addToggle("Минимум анимаций", "motion", cfg.reducedMotion)
 
-        addSection("УПРАВЛЕНИЕ")
+        addSection("ПРИМЕЧАНИЕ")
+        root.addView(body("BrawlBrain анализирует экран и даёт тактические подсказки. Он не нажимает кнопки игры автоматически."))
+
         val save = Button(this).apply {
             text = "СОХРАНИТЬ"
             setOnClickListener {
                 saveConfig()
-                Toast.makeText(this@SettingsActivity, "Настройки сохранены", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@SettingsActivity, "Сохранено", Toast.LENGTH_SHORT).show()
                 finish()
             }
         }
@@ -92,10 +86,10 @@ class SettingsActivity : Activity() {
         root.addView(save)
 
         val reset = Button(this).apply {
-            text = "СБРОСИТЬ В ПРЕСЕТ"
+            text = "СБРОСИТЬ"
             setOnClickListener {
                 BrainPrefs.reset(this@SettingsActivity)
-                Toast.makeText(this@SettingsActivity, "Сброшено", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@SettingsActivity, "Профиль сброшен", Toast.LENGTH_SHORT).show()
                 render()
             }
         }
@@ -106,114 +100,101 @@ class SettingsActivity : Activity() {
         setContentView(scroll)
     }
 
-    private fun addSection(label: String) {
-        val tv = TextView(this).apply {
-            text = label
-            textSize = 13f
-            setTextColor(0xFF85A8FF.toInt())
-            setPadding(4, 28, 4, 8)
-        }
-        root.addView(tv)
+    private fun addSection(text: String) {
+        root.addView(TextView(this).apply {
+            this.text = text
+            textSize = 12f
+            setTextColor(0xFF7FA4FF.toInt())
+            setPadding(4, 25, 4, 7)
+        })
     }
 
     private fun title(text: String): TextView = TextView(this).apply {
         this.text = text
         textSize = 28f
-        gravity = Gravity.CENTER_HORIZONTAL
+        gravity = Gravity.CENTER
         setTextColor(Color.WHITE)
     }
 
     private fun body(text: String): TextView = TextView(this).apply {
         this.text = text
         textSize = 14f
-        setTextColor(0xFF9BA4B7.toInt())
-        setPadding(8, 10, 8, 6)
+        setTextColor(0xFF9AA4B8.toInt())
+        setPadding(8, 10, 8, 4)
     }
 
-    private fun addSpinner(spinner: Spinner) {
-        root.addView(spinner)
-    }
-
-    private fun spinner(label: String, values: List<String>, selected: String): Spinner {
+    private fun makeSpinner(label: String, values: List<String>, selected: String): Spinner {
         val wrapper = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 4, 0, 8)
+            setPadding(0, 2, 0, 8)
         }
-        val labelView = TextView(this).apply {
+        wrapper.addView(TextView(this).apply {
             text = label
             textSize = 12f
-            setTextColor(0xFF777F92.toInt())
-        }
+            setTextColor(0xFF727B8D.toInt())
+        })
+
         val spinner = Spinner(this)
-        val adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_dropdown_item,
-            values
-        )
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, values)
         spinner.adapter = adapter
-        val idx = values.indexOf(selected).coerceAtLeast(0)
-        spinner.setSelection(idx)
-        wrapper.addView(labelView)
+        spinner.setSelection(values.indexOf(selected).coerceAtLeast(0))
         wrapper.addView(spinner)
         root.addView(wrapper)
         return spinner
     }
 
-    private fun seek(label: String, min: Int, max: Int, current: Int, suffix: String): SeekBar {
-        val titleView = TextView(this).apply {
+    private fun addSeek(label: String, minValue: Int, maxValue: Int, current: Int, suffix: String): SeekBar {
+        val labelView = TextView(this).apply {
             textSize = 12f
-            setTextColor(0xFF777F92.toInt())
-            setPadding(0, 6, 0, 0)
+            setTextColor(0xFF727B8D.toInt())
         }
         val bar = SeekBar(this).apply {
-            max = max - min
-            progress = (current - min).coerceIn(0, this.max)
+            max = maxValue - minValue
+            progress = (current - minValue).coerceIn(0, max)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    titleView.text = label + ": " + (min + p) + suffix
+                    labelView.text = label + ": " + (minValue + p) + suffix
                 }
                 override fun onStartTrackingTouch(s: SeekBar?) = Unit
                 override fun onStopTrackingTouch(s: SeekBar?) = Unit
             })
         }
-        bar.tag = min
-        root.addView(titleView)
+        labelView.text = label + ": " + current + suffix
+        bar.tag = minValue
+        root.addView(labelView)
         root.addView(bar)
         return bar
     }
 
-    private fun toggle(text: String, key: String, checked: Boolean) {
+    private fun addToggle(text: String, key: String, checked: Boolean) {
         val sw = Switch(this).apply {
             this.text = text
             textSize = 14f
             setTextColor(Color.WHITE)
             isChecked = checked
-            setPadding(0, 5, 0, 5)
+            setPadding(0, 4, 0, 4)
         }
         toggles[key] = sw
         root.addView(sw)
     }
 
     private fun styleButton(button: Button, primary: Boolean) {
-        val bg = GradientDrawable().apply {
+        button.background = GradientDrawable().apply {
             cornerRadius = 30f
-            setColor(if (primary) 0xFF547CFF.toInt() else 0xFF1A1E28.toInt())
+            setColor(if (primary) 0xFF557EFF.toInt() else 0xFF191D27.toInt())
         }
-        button.background = bg
         button.setTextColor(Color.WHITE)
         button.layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            58
-        ).apply { setMargins(0, 8, 0, 8) }
+            ViewGroup.LayoutParams.MATCH_PARENT, 58
+        ).apply { setMargins(0, 7, 0, 7) }
     }
 
     private fun value(bar: SeekBar): Int {
-        val min = (bar.tag as Int)
-        return min + bar.progress
+        return (bar.tag as Int) + bar.progress
     }
 
     private fun saveConfig() {
-        val cfg = BrainConfig(
+        BrainPrefs.save(this, BrainConfig(
             gameMode = modeSpinner.selectedItem.toString(),
             role = roleSpinner.selectedItem.toString(),
             performance = performanceSpinner.selectedItem.toString(),
@@ -230,7 +211,6 @@ class SettingsActivity : Activity() {
             showAdvice = toggles["advice"]?.isChecked ?: true,
             showDebug = toggles["debug"]?.isChecked ?: true,
             reducedMotion = toggles["motion"]?.isChecked ?: true
-        )
-        BrainPrefs.save(this, cfg)
+        ))
     }
 }
