@@ -3,8 +3,6 @@ package com.brawlbrain.rt
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
-import android.os.Handler
-import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 
 class DodgeAccessibilityService : AccessibilityService() {
@@ -14,8 +12,6 @@ class DodgeAccessibilityService : AccessibilityService() {
         @Volatile var screenW: Int = 1
         @Volatile var screenH: Int = 1
     }
-
-    private val main = Handler(Looper.getMainLooper())
 
     override fun onServiceConnected() {
         instance = this
@@ -54,7 +50,7 @@ class DodgeAccessibilityService : AccessibilityService() {
         val stroke = GestureDescription.StrokeDescription(
             path,
             0L,
-            105L
+            42L
         )
 
         val gesture = GestureDescription.Builder()
@@ -64,7 +60,7 @@ class DodgeAccessibilityService : AccessibilityService() {
         dispatchGesture(
             gesture,
             null,
-            main
+            null
         )
     }
 }
