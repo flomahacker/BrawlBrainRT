@@ -158,7 +158,7 @@ class OverlayView(context: Context) : View(context) {
         canvas.drawOval(rect, stroke)
 
         // Compact memory label. Prepared before drawing; no String allocation in onDraw.
-        text.textSize = 11f * scale
+        text.textSize = 9.5f * scale
         text.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         text.color = withAlpha(WHITE, (220f * fade).toInt())
         canvas.drawText(track.ageText, x + 33f * scale, y - 25f * scale, text)
@@ -333,8 +333,8 @@ class OverlayView(context: Context) : View(context) {
     private fun drawDebug(canvas: Canvas, scale: Float) {
         val left = 16f * scale
         val top = 16f * scale
-        val right = minOf(width.toFloat() - 16f * scale, 420f * scale)
-        val bottom = top + 34f * scale
+        val right = minOf(width.toFloat() - 16f * scale, 520f * scale)
+        val bottom = top + 48f * scale
 
         fill.style = Paint.Style.FILL
         fill.color = PANEL
@@ -347,7 +347,7 @@ class OverlayView(context: Context) : View(context) {
         canvas.drawText(
             frame.debugText,
             left + 10f * scale,
-            top + 22f * scale,
+            top + 20f * scale,
             text
         )
     }
@@ -377,6 +377,7 @@ class OverlayView(context: Context) : View(context) {
 
         mix((next.safeZoneX * 1000f).toInt().toLong())
         mix((next.safeZoneY * 1000f).toInt().toLong())
+        mix(next.debugText.hashCode().toLong())
         return h
     }
 
