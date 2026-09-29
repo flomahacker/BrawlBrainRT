@@ -52,6 +52,7 @@ class ScreenBrainService : Service() {
     private var lastWallAt = 0L
     private var lastInferenceAt = 0L
 
+    @Volatile
     private var config = BrainConfig()
     private var latestEntities = emptyList<Detection>()
     private var latestWalls = emptyList<Detection>()
@@ -209,7 +210,7 @@ class ScreenBrainService : Service() {
             return
         }
 
-        if (now - lastEntityAt < config.entityIntervalMs) {
+        // Dedicated low-latency entity tick while Dodge is armed.
             ir.acquireLatestImage()?.close()
             busy.set(false)
             return
