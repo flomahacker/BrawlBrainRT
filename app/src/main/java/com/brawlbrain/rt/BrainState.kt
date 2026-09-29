@@ -15,18 +15,28 @@ data class BrainFrame(
     val teammates: List<Detection>,
     val walls: List<Detection>,
     val recommendation: Recommendation,
+    val recommendationDetail: String,
     val target: Detection?,
+    val targetLeadX: Float,
+    val targetLeadY: Float,
+    val escapeX: Float,
+    val escapeY: Float,
     val threat: Float,
+    val opportunity: Float,
+    val cover: Float,
+    val isolation: Float,
     val enemyCount: Int,
     val fps: Float,
     val inferenceMs: Long,
-    val engine: String
+    val engine: String,
+    val gameMode: String,
+    val role: String
 )
 
-enum class Recommendation(val title: String, val subtitle: String) {
-    HOLD("ДЕРЖИ ПОЗИЦИЮ", "не лезь первым"),
-    PRESSURE("ДАВИ", "есть окно для давления"),
-    RETREAT("ОТХОДИ", "слишком высокий риск"),
-    TRACK("ТРЕКИНГ", "следи за ближайшим врагом"),
-    RESET("РЕСЕТ", "собери информацию")
+enum class Recommendation(val title: String) {
+    HOLD("ДЕРЖИ"),
+    PRESSURE("ДАВИ"),
+    RETREAT("ОТХОДИ"),
+    TRACK("ТРЕК"),
+    RESET("ИНФОРМАЦИЯ")
 }
