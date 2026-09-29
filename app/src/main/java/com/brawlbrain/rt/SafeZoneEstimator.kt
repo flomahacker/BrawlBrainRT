@@ -4,6 +4,7 @@ import android.media.Image
 import java.nio.ByteBuffer
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 
 data class SafeZoneState(
     val detected: Boolean = false,
