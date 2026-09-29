@@ -78,6 +78,8 @@ class ScreenBrainService : Service() {
     private var latestWalls = emptyList<Detection>()
     private var latestFps = 0f
     private var latestInferenceMs = 0L
+    private var latestDetectorCount = 0
+    private var latestPipelineError = ""
     private var latestHud = HudState()
     private var latestZone = SafeZoneState()
     @Volatile private var latestSnapshot: BrainFrame? = null
@@ -125,11 +127,13 @@ class ScreenBrainService : Service() {
                     confidenceThreshold = (config.confidencePercent - 4).coerceAtLeast(16) / 100f
                 )
             }
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            latestPipelineError =
+                "MODEL " + t.javaClass.simpleName + ": " + (t.message ?: "load failed")
+            android.util.Log.e("BrawlBrainRT", latestPipelineError, t)
             mainHandler.post {
-                overlay?.contentDescription = "Vision model failed to load"
+                overlay?.contentDescription = latestPipelineError
             }
-            stopSelf()
         }
     }
 
@@ -299,7 +303,9 @@ class ScreenBrainService : Service() {
                         captureH,
                         Bitmap.Config.ARGB_8888
                     )
-                    raw.copyPixelsFromBuffer(buffer)
+                    val safeBuffer = buffer.duplicate()
+                    safeBuffer.rewind()
+                    raw.copyPixelsFromBuffer(safeBuffer)
 
                     val frameBitmap =
                         if (rawWidth == captureW) {
@@ -324,6 +330,9 @@ class ScreenBrainService : Service() {
                         val t0 = SystemClock.elapsedRealtime()
 
                         val detected = entityDetector.detect(frameBitmap)
+                        latestDetectorCount = detected.size
+                        latestPipelineError = entityDetector.lastError
+
                         val tracked = enemyTracker.update(
                             detected.filter { it.label == "enemy" },
                             t0,
@@ -416,14 +425,18 @@ class ScreenBrainService : Service() {
                         (System.nanoTime() - currentImage.timestamp) / 1_000_000L
                     ).coerceAtLeast(0L)
 
+                    val detectorState =
+                        if (latestPipelineError.isBlank()) "OK" else "ERR"
                     val debug = String.format(
                         Locale.US,
-                        "delay %dms • infer %dms • fps %.1f • tracks %d • %s",
+                        "delay %dms • infer %dms • fps %.1f • det %d • tracks %d • %s • %s",
                         captureDelayMs,
                         latestInferenceMs,
                         latestFps,
+                        latestDetectorCount,
                         predicted.trackCount,
-                        if (::entityDetector.isInitialized) entityDetector.backend else "INIT"
+                        if (::entityDetector.isInitialized) entityDetector.backend else "INIT",
+                        detectorState
                     )
 
                     active = active.copy(
@@ -447,8 +460,10 @@ class ScreenBrainService : Service() {
                     }
                 }
             }
-        } catch (_: Throwable) {
-            // A malformed frame must never kill the real-time service.
+        } catch (t: Throwable) {
+            latestPipelineError =
+                "PIPE " + t.javaClass.simpleName + ": " + (t.message ?: "frame failed")
+            android.util.Log.e("BrawlBrainRT", latestPipelineError, t)
         } finally {
             busy.set(false)
         }
