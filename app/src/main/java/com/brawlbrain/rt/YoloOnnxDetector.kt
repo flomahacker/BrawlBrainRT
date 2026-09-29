@@ -61,7 +61,8 @@ class YoloOnnxDetector(
             }
         }
 
-        try {
+        if (preferXnnpack) {
+            try {
                 val options = OrtSession.SessionOptions()
                 options.setIntraOpNumThreads(2)
                 options.setInterOpNumThreads(1)
@@ -72,16 +73,17 @@ class YoloOnnxDetector(
                     "XNNPACK"
                 )
             } catch (_: Throwable) {
-                val options = OrtSession.SessionOptions()
-                options.setIntraOpNumThreads(2)
-                options.setInterOpNumThreads(1)
-                options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-                return SessionBundle(
-                    env.createSession(modelBytes, options),
-                    "CPU"
-                )
             }
         }
+
+        val options = OrtSession.SessionOptions()
+        options.setIntraOpNumThreads(2)
+        options.setInterOpNumThreads(1)
+        options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+        return SessionBundle(
+            env.createSession(modelBytes, options),
+            "CPU"
+        )
     }
 
     @Synchronized
