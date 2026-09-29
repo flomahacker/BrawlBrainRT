@@ -83,7 +83,7 @@ class OverlayView(context: Context) : View(context) {
         textPaint.textSize = 28f
         textPaint.color = Color.WHITE
         canvas.drawText(
-            if (config.showAdvice) frame.recommendation.title else "BRAWLBRAIN",
+            if (config.showAdvice) frame.intelActionTitle else "BRAWLBRAIN",
             54f,
             68f,
             textPaint
@@ -93,7 +93,7 @@ class OverlayView(context: Context) : View(context) {
         smallPaint.color = 0xFFE1E6F0.toInt()
 
         val detail = if (config.showAdvice) {
-            frame.recommendationDetail
+            frame.intelActionDetail
         } else {
             "VISION ONLINE • ${frame.role} • ${frame.gameMode}"
         }
@@ -104,7 +104,7 @@ class OverlayView(context: Context) : View(context) {
 
         if (config.showThreat) {
             canvas.drawText(
-                "Угроза ${percent(frame.threat)}%   Окно ${percent(frame.opportunity)}%   Целей ${frame.enemyCount}",
+                "Угроза ${percent(frame.threat)}%   Окно ${percent(frame.opportunity)}%   Фокус ${percent(frame.intelFocusScore)}%",
                 54f,
                 128f,
                 smallPaint
