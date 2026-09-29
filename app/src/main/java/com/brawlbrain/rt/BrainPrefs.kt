@@ -30,6 +30,7 @@ data class BrainConfig(
     val showGhosts: Boolean = true,
     val ghostTtlMs: Long = 5000L,
     val predictionLeadMs: Long = 380L,
+    val pipelineDelayMs: Long = 80L,
     val predictionMaxSeconds: Float = 0.55f,
     val showPrediction: Boolean = true,
 
@@ -96,6 +97,7 @@ object BrainPrefs {
     private const val DODGE_COOLDOWN = "dodge_cooldown"
     private const val SHOW_GHOSTS = "show_ghosts"
     private const val SHOW_PREDICTION = "show_prediction"
+    private const val PIPELINE_DELAY = "pipeline_delay"
     private const val SHOW_RANGE_RINGS = "show_range_rings"
     private const val SHOW_ENEMY_RANGE_RINGS = "show_enemy_range_rings"
     private const val RANGE_SCALE = "range_scale"
@@ -156,6 +158,7 @@ object BrainPrefs {
             dodgeCooldownMs = p.getLong(DODGE_COOLDOWN, 90L).coerceIn(60L, 260L),
             showGhosts = p.getBoolean(SHOW_GHOSTS, true),
             predictionLeadMs = p.getLong("prediction_lead", 380L).coerceIn(300L, 500L),
+            pipelineDelayMs = p.getLong(PIPELINE_DELAY, 80L).coerceIn(0L, 180L),
             showPrediction = p.getBoolean(SHOW_PREDICTION, true),
             showRangeRings = p.getBoolean(SHOW_RANGE_RINGS, true),
             showEnemyRangeRings = p.getBoolean(SHOW_ENEMY_RANGE_RINGS, false),
@@ -200,6 +203,7 @@ object BrainPrefs {
             .putLong(DODGE_COOLDOWN, config.dodgeCooldownMs.coerceIn(60L, 260L))
             .putBoolean(SHOW_GHOSTS, config.showGhosts)
             .putLong("prediction_lead", config.predictionLeadMs.coerceIn(300L, 500L))
+            .putLong(PIPELINE_DELAY, config.pipelineDelayMs.coerceIn(0L, 180L))
             .putBoolean(SHOW_PREDICTION, config.showPrediction)
             .putBoolean(SHOW_RANGE_RINGS, config.showRangeRings)
             .putBoolean(SHOW_ENEMY_RANGE_RINGS, config.showEnemyRangeRings)
