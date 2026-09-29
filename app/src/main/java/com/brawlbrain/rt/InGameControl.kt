@@ -169,13 +169,13 @@ class InGameControl(
             progress = (cfg.dodgeStrengthPercent - 35).coerceIn(0, 65)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    strengthText.text = "Сила манса: \${35 + p}%"
+                    strengthText.text = "Сила манса: ${35 + p}%"
                 }
                 override fun onStartTrackingTouch(s: SeekBar?) = Unit
                 override fun onStopTrackingTouch(s: SeekBar?) = Unit
             })
         }
-        strengthText.text = "Сила манса: \${cfg.dodgeStrengthPercent}%"
+        strengthText.text = "Сила манса: ${cfg.dodgeStrengthPercent}%"
         root.addView(strengthText)
         root.addView(strength)
 
