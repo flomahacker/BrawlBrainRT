@@ -9,7 +9,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
-import android.os.Build
 import java.nio.FloatBuffer
 import kotlin.math.max
 import kotlin.math.min
@@ -27,33 +26,17 @@ class YoloOnnxDetector(
     private val inputSize: Int
 
     init {
-        session = createSession()
+        session = OrtSession.SessionOptions().run {
+            setIntraOpNumThreads(2)
+            setInterOpNumThreads(1)
+            setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+            env.createSession(modelBytes, this)
+        }
+
         inputName = session.inputNames.first()
         val info = session.inputInfo[inputName]?.info as? TensorInfo
         val shape = info?.shape ?: longArrayOf(1, 3, 640, 640)
         inputSize = (shape.lastOrNull { it > 0 }?.toInt() ?: 640).coerceIn(320, 640)
-    }
-
-    private fun createSession(): OrtSession {
-        val optimized = OrtSession.SessionOptions()
-        optimized.setIntraOpNumThreads(2)
-        optimized.setInterOpNumThreads(1)
-        optimized.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-
-        if (Build.VERSION.SDK_INT >= 27) {
-            try {
-                optimized.addNnapi()
-                return env.createSession(modelBytes, optimized)
-            } catch (_: Throwable) {
-                try { optimized.close() } catch (_: Throwable) {}
-            }
-        }
-
-        val cpu = OrtSession.SessionOptions()
-        cpu.setIntraOpNumThreads(3)
-        cpu.setInterOpNumThreads(1)
-        cpu.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-        return env.createSession(modelBytes, cpu)
     }
 
     fun detect(source: Bitmap): List<Detection> {
@@ -102,6 +85,7 @@ class YoloOnnxDetector(
             data[plane + i] = Color.green(c) / 255f
             data[plane * 2 + i] = Color.blue(c) / 255f
         }
+
         return data
     }
 
@@ -110,20 +94,28 @@ class YoloOnnxDetector(
             inputSize.toFloat() / source.width,
             inputSize.toFloat() / source.height
         )
+
         val newW = (source.width * scale).toInt().coerceAtLeast(1)
         val newH = (source.height * scale).toInt().coerceAtLeast(1)
         val padX = (inputSize - newW) / 2f
         val padY = (inputSize - newH) / 2f
 
-        val out = Bitmap.createBitmap(inputSize, inputSize, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(out)
-        canvas.drawColor(Color.rgb(114, 114, 114))
-        canvas.drawBitmap(
-            source,
-            null,
-            RectF(padX, padY, padX + newW, padY + newH),
-            Paint(Paint.FILTER_BITMAP_FLAG)
+        val out = Bitmap.createBitmap(
+            inputSize,
+            inputSize,
+            Bitmap.Config.ARGB_8888
         )
+
+        Canvas(out).apply {
+            drawColor(Color.rgb(114, 114, 114))
+            drawBitmap(
+                source,
+                null,
+                RectF(padX, padY, padX + newW, padY + newH),
+                Paint(Paint.FILTER_BITMAP_FLAG)
+            )
+        }
+
         return LetterboxResult(out, scale, padX, padY)
     }
 
@@ -155,6 +147,7 @@ private object YoloParser {
 
         val a = shape[1].toInt()
         val b = shape[2].toInt()
+
         val channelsFirst = a <= b
         val channels = if (channelsFirst) a else b
         val count = if (channelsFirst) b else a
@@ -169,7 +162,7 @@ private object YoloParser {
             else raw[row * channels + col]
         }
 
-        val candidates = ArrayList<Detection>(32)
+        val candidates = ArrayList<Detection>(24)
         val classCount = min(labels.size, channels - 4)
 
         for (i in 0 until count) {
@@ -184,6 +177,7 @@ private object YoloParser {
             for (c in 0 until classCount) {
                 var score = at(i, 4 + c)
                 if (score < 0f || score > 1f) score = sigmoid(score)
+
                 if (score > bestScore) {
                     bestScore = score
                     bestClass = c
@@ -212,20 +206,25 @@ private object YoloParser {
             )
         }
 
-        return nms(candidates, iouThreshold).take(12)
+        return nms(candidates, iouThreshold).take(10)
     }
 
-    private fun nms(input: List<Detection>, threshold: Float): List<Detection> {
+    private fun nms(
+        input: List<Detection>,
+        threshold: Float
+    ): List<Detection> {
         val output = ArrayList<Detection>()
         val remaining = input.sortedByDescending { it.confidence }.toMutableList()
 
         while (remaining.isNotEmpty()) {
             val best = remaining.removeAt(0)
             output += best
+
             remaining.removeAll {
                 it.label == best.label && iou(best, it) >= threshold
             }
         }
+
         return output
     }
 
