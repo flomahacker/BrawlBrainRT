@@ -198,12 +198,8 @@ class MainActivity : Activity() {
         )
         spinner.setSelection(values.indexOf(selected).coerceAtLeast(0))
         wrapper.addView(spinner)
-        (rootContainer(wrapper))?.let { it.addView(wrapper) }
+        root.addView(wrapper)
         return spinner
-    }
-
-    private fun rootContainer(view: android.view.View): LinearLayout? {
-        return view.parent as? LinearLayout
     }
 
     private fun refreshStatus() {
