@@ -89,6 +89,7 @@ class ScreenBrainService : Service() {
         powerManager = getSystemService(POWER_SERVICE) as PowerManager
         vibrator = getSystemService(VIBRATOR_SERVICE) as Vibrator
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        enemyTracker.configure(config)
 
         worker = HandlerThread(
             "BrawlBrainVision",
@@ -103,6 +104,7 @@ class ScreenBrainService : Service() {
         attachOverlay()
         inGameControl = InGameControl(this, windowManager) { updated ->
             config = updated
+            enemyTracker.configure(updated)
             overlay?.updateConfig(updated)
         }
         if (Settings.canDrawOverlays(this)) {
@@ -263,7 +265,7 @@ class ScreenBrainService : Service() {
         try {
             image.use { currentImage ->
                 val thermalInterval = effectiveEntityInterval()
-                val effectiveLeadMs = (config.predictionLeadMs + config.pipelineDelayMs).coerceIn(300L, 550L)
+                val effectiveLeadMs = (config.predictionLeadMs + config.pipelineDelayMs).coerceIn(300L, 500L)
                 val runYolo = now - lastEntityAt >= thermalInterval
                 val safeZoneEnabled = config.gameMode == "Showdown"
 
