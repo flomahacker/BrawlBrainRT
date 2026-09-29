@@ -211,6 +211,9 @@ class ScreenBrainService : Service() {
         }
 
         // Dedicated low-latency entity tick while Dodge is armed.
+        val dodgeVisionInterval = if (config.autoDodge) 68L else config.entityIntervalMs
+
+        if (now - lastEntityAt < dodgeVisionInterval) {
             ir.acquireLatestImage()?.close()
             busy.set(false)
             return
