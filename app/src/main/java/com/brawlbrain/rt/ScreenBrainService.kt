@@ -58,7 +58,6 @@ class ScreenBrainService : Service() {
 
     private val brain = TacticalBrain()
     private val dodgeBrain = DodgeBrain()
-    private val combatIntel = CombatIntel()
     private val enemyTracker = DetectionTracker()
     private val hudEstimator = HudStateEstimator()
     private val safeZoneEstimator = SafeZoneEstimator()
@@ -371,24 +370,7 @@ class ScreenBrainService : Service() {
                             config
                         )
 
-                        val intel = combatIntel.decide(
-                            active.player,
-                            active.enemies,
-                            active.teammates,
-                            null,
-                            config.brawler,
-                            t1
-                        )
-
                         active = active.copy(
-                            intelActionTitle = intel.actionTitle,
-                            intelActionDetail = intel.actionDetail,
-                            intelFocusX = intel.focusX,
-                            intelFocusY = intel.focusY,
-                            intelFocusScore = intel.focusScore,
-                            fireWindow = intel.fireWindow,
-                            actionX = intel.actionX,
-                            actionY = intel.actionY,
                             trackVisuals = tracked.visuals,
                             trackCount = tracked.trackCount,
                             hud = latestHud,
