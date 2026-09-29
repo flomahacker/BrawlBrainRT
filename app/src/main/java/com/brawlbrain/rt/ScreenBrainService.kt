@@ -47,6 +47,7 @@ class ScreenBrainService : Service() {
     private val brain = TacticalBrain()
     private val dodgeBrain = DodgeBrain()
     private val projectileAnalyzer = ProjectileThreatAnalyzer()
+    private val combatIntel = CombatIntel()
 
     private val busy = AtomicBoolean(false)
     private var lastEntityAt = 0L
@@ -313,6 +314,24 @@ class ScreenBrainService : Service() {
                             "YOLOv11",
                             config
                         )
+                        val intel = combatIntel.decide(
+                            snapshot.player,
+                            snapshot.enemies,
+                            snapshot.teammates,
+                            projectileThreat,
+                            config.brawler,
+                            t1
+                        )
+
+                        snapshot = snapshot.copy(
+                            intelActionTitle = intel.actionTitle,
+                            intelActionDetail = intel.actionDetail,
+                            intelFocusX = intel.focusX,
+                            intelFocusY = intel.focusY,
+                            intelFocusScore = intel.focusScore,
+                            fireWindow = intel.fireWindow
+                        )
+
                         latestSnapshot = snapshot
                     } finally {
                         frame.recycle()
