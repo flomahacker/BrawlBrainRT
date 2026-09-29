@@ -48,6 +48,7 @@ class ScreenBrainService : Service() {
     private var lastWallAt = 0L
     private var lastInferenceAt = 0L
 
+    private var config = BrainConfig()
     private var latestEntities = emptyList<Detection>()
     private var latestWalls = emptyList<Detection>()
     private var latestFps = 0f
@@ -56,6 +57,7 @@ class ScreenBrainService : Service() {
     override fun onCreate() {
         super.onCreate()
 
+        config = BrainPrefs.load(this)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
         worker = HandlerThread(
@@ -73,16 +75,16 @@ class ScreenBrainService : Service() {
             entityDetector = YoloOnnxDetector(
                 assets.open("models/PylaEntityDetectorV2.onnx").use { it.readBytes() },
                 entityLabels,
-                confidenceThreshold = 0.34f
+                confidenceThreshold = config.confidencePercent / 100f
             )
             wallDetector = YoloOnnxDetector(
                 assets.open("models/PylaWallDetectorV2.onnx").use { it.readBytes() },
                 wallLabels,
-                confidenceThreshold = 0.30f
+                confidenceThreshold = (config.confidencePercent - 4).coerceAtLeast(16) / 100f
             )
         } catch (_: Throwable) {
             mainHandler.post {
-                overlay?.contentDescription = "Не удалось загрузить YOLO"
+                overlay?.contentDescription = "YOLO не загрузился"
             }
             stopSelf()
         }
@@ -104,7 +106,7 @@ class ScreenBrainService : Service() {
 
         val notification = Notification.Builder(this, channelId)
             .setContentTitle("BrawlBrain RT")
-            .setContentText("Vision работает локально на телефоне")
+            .setContentText("AI vision работает локально")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setOngoing(true)
             .build()
@@ -188,7 +190,7 @@ class ScreenBrainService : Service() {
             return
         }
 
-        if (now - lastEntityAt < 125L) {
+        if (now - lastEntityAt < config.entityIntervalMs) {
             busy.set(false)
             ir.acquireLatestImage()?.close()
             return
@@ -218,7 +220,7 @@ class ScreenBrainService : Service() {
                 )
                 raw.copyPixelsFromBuffer(buffer)
 
-                val targetWidth = minOf(1280, rawWidth)
+                val targetWidth = minOf(config.frameLongEdge, rawWidth)
                 val targetHeight = (fullH * targetWidth.toFloat() / rawWidth)
                     .toInt()
                     .coerceAtLeast(1)
@@ -236,7 +238,7 @@ class ScreenBrainService : Service() {
                 latestEntities = entityDetector.detect(frame)
 
                 val wallNow = SystemClock.elapsedRealtime()
-                if (wallNow - lastWallAt >= 600L) {
+                if (wallNow - lastWallAt >= config.wallIntervalMs) {
                     latestWalls = wallDetector.detect(frame)
                     lastWallAt = wallNow
                 }
@@ -255,7 +257,8 @@ class ScreenBrainService : Service() {
                     latestWalls,
                     latestFps,
                     latestInferenceMs,
-                    "YOLOv11"
+                    "YOLOv11",
+                    config
                 )
 
                 mainHandler.post {
@@ -265,7 +268,7 @@ class ScreenBrainService : Service() {
                 frame.recycle()
             }
         } catch (_: Throwable) {
-            // Ignore one malformed frame; keep the real-time loop alive.
+            // One bad frame must not kill the vision loop.
         } finally {
             busy.set(false)
         }
