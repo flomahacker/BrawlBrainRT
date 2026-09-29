@@ -136,8 +136,8 @@ class MainActivity : Activity() {
     }
 
     private fun updateStatus() {
-        status.text = if (Settings.canDrawOverlays(this)) {\n            "Слой: разрешён\\nНажми запуск и выбери окно/экран для захвата"
-        } else {
+        status.text = if (Settings.canDrawOverlays(this)) {
+            "Слой: разрешён" + System.lineSeparator() + "Нажми запуск и выбери окно/экран для захвата"
             "Нужно разрешение «поверх других приложений»"
         }
     }
