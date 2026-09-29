@@ -2,11 +2,11 @@ package com.brawlbrain.rt
 
 import android.app.Activity
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.*
-import android.graphics.drawable.GradientDrawable
 
 class SettingsActivity : Activity() {
 
@@ -19,6 +19,7 @@ class SettingsActivity : Activity() {
     private lateinit var confidenceSeek: SeekBar
     private lateinit var opacitySeek: SeekBar
     private lateinit var scaleSeek: SeekBar
+    private lateinit var predictionSeek: SeekBar
     private val toggles = LinkedHashMap<String, Switch>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,51 +29,71 @@ class SettingsActivity : Activity() {
 
     private fun render() {
         val cfg = BrainPrefs.load(this)
-
         val scroll = ScrollView(this).apply { setBackgroundColor(0xFF090B11.toInt()) }
+
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(26, 30, 26, 42)
         }
 
         root.addView(title("BRAWLBRAIN PRO"))
-        root.addView(body("Глубокая настройка vision, HUD и тактического мозга. Профиль хранится локально."))
+        root.addView(body(
+            "Visual-first HUD: память врагов, прогноз, дальность, предупреждения и состояние HUD."
+        ))
 
         addSection("БОЕВОЙ ПРОФИЛЬ")
-        modeSpinner = makeSpinner("Режим", listOf(
-            "Universal", "Showdown", "Gem Grab", "Brawl Ball", "Knockout",
-            "Wipeout", "Bounty", "Hot Zone", "Heist", "Paint Brawl", "Basket Brawl", "Duels"
-        ), cfg.gameMode)
-
-        roleSpinner = makeSpinner("Архетип", listOf(
-            "Universal", "Shooter", "Assassin", "Tank", "Thrower", "Support"
-        ), cfg.role)
-
-        performanceSpinner = makeSpinner("Производительность", listOf(
-            "Battery Saver", "Balanced", "Quality"
-        ), cfg.performance)
+        modeSpinner = makeSpinner(
+            "Режим",
+            listOf(
+                "Universal", "Showdown", "Gem Grab", "Brawl Ball", "Knockout",
+                "Wipeout", "Bounty", "Hot Zone", "Heist", "Paint Brawl", "Basket Brawl", "Duels"
+            ),
+            cfg.gameMode
+        )
+        roleSpinner = makeSpinner(
+            "Архетип",
+            listOf("Universal", "Shooter", "Assassin", "Tank", "Thrower", "Support"),
+            cfg.role
+        )
+        performanceSpinner = makeSpinner(
+            "Производительность",
+            listOf("Battery Saver", "Balanced", "Quality"),
+            cfg.performance
+        )
 
         addSection("VISION")
-        entitySeek = addSeek("Интервал детектора врагов", 70, 240, cfg.entityIntervalMs.toInt(), " мс")
-        wallSeek = addSeek("Интервал стен/укрытий", 250, 1600, cfg.wallIntervalMs.toInt(), " мс")
+        entitySeek = addSeek("Интервал детектора", 60, 100, cfg.entityIntervalMs.toInt().coerceIn(60, 100), " мс")
+        wallSeek = addSeek("Интервал стен/укрытий", 250, 1600, cfg.wallIntervalMs.toInt().coerceIn(250, 1600), " мс")
         confidenceSeek = addSeek("Порог уверенности", 20, 70, cfg.confidencePercent, "%")
+        predictionSeek = addSeek("Упреждение", 300, 500, cfg.predictionLeadMs.toInt(), " мс")
 
-        addSection("HUD")
-        opacitySeek = addSeek("Прозрачность", 40, 100, cfg.hudOpacityPercent, "%")
-        scaleSeek = addSeek("Размер", 75, 130, cfg.hudScalePercent, "%")
+        addSection("ГЛАВНЫЕ СЛОИ")
+        addToggle("Память врагов", "ghosts", cfg.showGhosts)
+        addToggle("Точка упреждения", "prediction", cfg.showPrediction)
+        addToggle("Кольцо своей атаки", "range", cfg.showRangeRings)
+        addToggle("Кольца врагов", "enemy_range", cfg.showEnemyRangeRings)
+        addToggle("Критичные предупреждения", "warnings", cfg.showWarnings)
 
-        addSection("СЛОИ")
-        addToggle("Показывать врагов", "enemy", cfg.showEnemies)
-        addToggle("Показывать тиммейтов", "teammate", cfg.showTeammates)
-        addToggle("Показывать стены/укрытия", "walls", cfg.showWalls)
-        addToggle("Линия приоритетной цели", "target", cfg.showTargetLine)
-        addToggle("Кольцо угрозы", "threat", cfg.showThreat)
-        addToggle("Главный совет", "advice", cfg.showAdvice)
-        addToggle("FPS / latency", "debug", cfg.showDebug)
+        addSection("СЛУЖЕБНЫЕ")
+        opacitySeek = addSeek("Прозрачность HUD", 40, 100, cfg.hudOpacityPercent, "%")
+        scaleSeek = addSeek("Размер HUD", 75, 130, cfg.hudScalePercent, "%")
+        addToggle("Старые метки врагов", "enemy", cfg.showEnemies)
+        addToggle("Старые линии цели", "target", cfg.showTargetLine)
+        addToggle("FPS / задержка / треки", "debug", cfg.showDebug)
         addToggle("Минимум анимаций", "motion", cfg.reducedMotion)
 
-        addSection("ПРИМЕЧАНИЕ")
-        root.addView(body("BrawlBrain анализирует экран и даёт тактические подсказки. Он не нажимает кнопки игры автоматически."))
+        addSection("ДАЛЬНОСТЬ")
+        root.addView(body(
+            "Buzz: \${BrawlerCombatTable.profile("Buzz").attackRangeRaw} raw • " +
+                "Tick: \${BrawlerCombatTable.profile("Tick").attackRangeRaw} raw. " +
+                "Масштаб экрана хранится в конфиге; радиус выбранного бойца синхронизируется автоматически."
+        ))
+
+        addSection("ПРЕДУПРЕЖДЕНИЯ")
+        root.addView(body(
+            "Для предупреждений используются разные пороги входа и выхода плюс кулдаун, " +
+                "поэтому состояние не мигает при пограничных кадрах. Одновременно виден только один тип."
+        ))
 
         val save = Button(this).apply {
             text = "СОХРАНИТЬ"
@@ -100,24 +121,24 @@ class SettingsActivity : Activity() {
         setContentView(scroll)
     }
 
-    private fun addSection(text: String) {
+    private fun addSection(value: String) {
         root.addView(TextView(this).apply {
-            this.text = text
+            text = value
             textSize = 12f
             setTextColor(0xFF7FA4FF.toInt())
             setPadding(4, 25, 4, 7)
         })
     }
 
-    private fun title(text: String): TextView = TextView(this).apply {
-        this.text = text
+    private fun title(value: String): TextView = TextView(this).apply {
+        text = value
         textSize = 28f
         gravity = Gravity.CENTER
         setTextColor(Color.WHITE)
     }
 
-    private fun body(text: String): TextView = TextView(this).apply {
-        this.text = text
+    private fun body(value: String): TextView = TextView(this).apply {
+        text = value
         textSize = 14f
         setTextColor(0xFF9AA4B8.toInt())
         setPadding(8, 10, 8, 4)
@@ -135,15 +156,20 @@ class SettingsActivity : Activity() {
         })
 
         val spinner = Spinner(this)
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, values)
-        spinner.adapter = adapter
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, values)
         spinner.setSelection(values.indexOf(selected).coerceAtLeast(0))
         wrapper.addView(spinner)
         root.addView(wrapper)
         return spinner
     }
 
-    private fun addSeek(label: String, minValue: Int, maxValue: Int, current: Int, suffix: String): SeekBar {
+    private fun addSeek(
+        label: String,
+        minValue: Int,
+        maxValue: Int,
+        current: Int,
+        suffix: String
+    ): SeekBar {
         val labelView = TextView(this).apply {
             textSize = 12f
             setTextColor(0xFF727B8D.toInt())
@@ -166,9 +192,9 @@ class SettingsActivity : Activity() {
         return bar
     }
 
-    private fun addToggle(text: String, key: String, checked: Boolean) {
+    private fun addToggle(label: String, key: String, checked: Boolean) {
         val sw = Switch(this).apply {
-            this.text = text
+            text = label
             textSize = 14f
             setTextColor(Color.WHITE)
             isChecked = checked
@@ -185,32 +211,39 @@ class SettingsActivity : Activity() {
         }
         button.setTextColor(Color.WHITE)
         button.layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 58
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            58
         ).apply { setMargins(0, 7, 0, 7) }
     }
 
-    private fun value(bar: SeekBar): Int {
-        return (bar.tag as Int) + bar.progress
-    }
+    private fun value(bar: SeekBar): Int =
+        (bar.tag as Int) + bar.progress
 
     private fun saveConfig() {
-        BrainPrefs.save(this, BrainConfig(
+        val current = BrainPrefs.load(this)
+
+        val updated = current.copy(
             gameMode = modeSpinner.selectedItem.toString(),
             role = roleSpinner.selectedItem.toString(),
             performance = performanceSpinner.selectedItem.toString(),
-            entityIntervalMs = value(entitySeek).toLong(),
+            entityIntervalMs = value(entitySeek).toLong().coerceIn(60L, 100L),
             wallIntervalMs = value(wallSeek).toLong(),
             confidencePercent = value(confidenceSeek),
             hudOpacityPercent = value(opacitySeek),
             hudScalePercent = value(scaleSeek),
-            showEnemies = toggles["enemy"]?.isChecked ?: true,
-            showTeammates = toggles["teammate"]?.isChecked ?: true,
-            showWalls = toggles["walls"]?.isChecked ?: true,
-            showTargetLine = toggles["target"]?.isChecked ?: true,
-            showThreat = toggles["threat"]?.isChecked ?: true,
-            showAdvice = toggles["advice"]?.isChecked ?: true,
-            showDebug = toggles["debug"]?.isChecked ?: true,
-            reducedMotion = toggles["motion"]?.isChecked ?: true
-        ))
+            predictionLeadMs = value(predictionSeek).toLong().coerceIn(300L, 500L),
+            showGhosts = toggles["ghosts"]?.isChecked ?: true,
+            showPrediction = toggles["prediction"]?.isChecked ?: true,
+            showRangeRings = toggles["range"]?.isChecked ?: true,
+            showEnemyRangeRings = toggles["enemy_range"]?.isChecked ?: false,
+            showWarnings = toggles["warnings"]?.isChecked ?: true,
+            showEnemies = toggles["enemy"]?.isChecked ?: false,
+            showTargetLine = toggles["target"]?.isChecked ?: false,
+            showDebug = toggles["debug"]?.isChecked ?: false,
+            reducedMotion = toggles["motion"]?.isChecked ?: true,
+            attackRangeRaw = BrawlerCombatTable.profile(current.brawler).attackRangeRaw
+        )
+
+        BrainPrefs.save(this, updated)
     }
 }
