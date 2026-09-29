@@ -57,7 +57,6 @@ class ScreenBrainService : Service() {
     private lateinit var wallDetector: YoloOnnxDetector
 
     private val brain = TacticalBrain()
-    private val dodgeBrain = DodgeBrain()
     private val enemyTracker = DetectionTracker()
     private val hudEstimator = HudStateEstimator()
     private val safeZoneEstimator = SafeZoneEstimator()
@@ -445,29 +444,6 @@ class ScreenBrainService : Service() {
                         }
                     }
 
-                    if (config.autoDodge && runYolo) {
-                        val dodge = dodgeBrain.decide(
-                            active.player,
-                            visibleTracks,
-                            now,
-                            config,
-                            null
-                        )
-
-                        if (dodge.shouldDodge) {
-                            val controller = DodgeAccessibilityService.instance
-                            if (controller != null) {
-                                mainHandler.postAtFrontOfQueue {
-                                    if (config.autoDodge) {
-                                        controller.dodge(
-                                            dodge.x,
-                                            dodge.y,
-                                            config.dodgeStrengthPercent / 100f
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }
