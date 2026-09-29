@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">BrawlBrain RT</string>
+    <string name="accessibility_description">Real-time tactical controller for BrawlBrain.</string>
+</resources>
