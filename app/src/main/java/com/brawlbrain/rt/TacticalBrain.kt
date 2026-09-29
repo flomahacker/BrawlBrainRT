@@ -1,13 +1,12 @@
 package com.brawlbrain.rt
 
 import android.os.SystemClock
-
+import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
 class TacticalBrain {
-
     private var lastTargetX = 0.5f
     private var lastTargetY = 0.5f
     private var lastTime = 0L
@@ -28,25 +27,17 @@ class TacticalBrain {
         val px = player?.cx ?: 0.5f
         val py = player?.cy ?: 0.5f
 
-        val scored = enemies.map { enemy ->
-            val d = distance(px, py, enemy.cx, enemy.cy)
-            val confidence = enemy.confidence
-            val size = (enemy.width * enemy.height * 5f).coerceIn(0f, 1f)
-            val centrality = 1f - distance(0.5f, 0.5f, enemy.cx, enemy.cy)
-            val score = 0.48f * (1f - d) +
-                0.22f * confidence +
-                0.18f * size +
-                0.12f * centrality
-            enemy to score
-        }.sortedByDescending { it.second }
-
-        val target = scored.firstOrNull()?.first
+        val target = enemies.minByOrNull { distance(px, py, it.cx, it.cy) }
         val nearest = target?.let { distance(px, py, it.cx, it.cy) } ?: 1f
 
         val now = SystemClock.elapsedRealtime()
-        val dt = if (lastTime == 0L) 0.1f else ((now - lastTime).coerceAtLeast(16L) / 1000f)
-        val vx = if (target == null) 0f else ((target.cx - lastTargetX) / dt).coerceIn(-2.2f, 2.2f)
-        val vy = if (target == null) 0f else ((target.cy - lastTargetY) / dt).coerceIn(-2.2f, 2.2f)
+        val dt = if (lastTime == 0L) 0.12f
+        else ((now - lastTime).coerceAtLeast(16L) / 1000f)
+
+        val vx = if (target == null) 0f
+        else ((target.cx - lastTargetX) / dt).coerceIn(-2.0f, 2.0f)
+        val vy = if (target == null) 0f
+        else ((target.cy - lastTargetY) / dt).coerceIn(-2.0f, 2.0f)
 
         if (target != null) {
             lastTargetX = target.cx
@@ -54,101 +45,137 @@ class TacticalBrain {
             lastTime = now
         }
 
-        val leadTime = when (config.role) {
-            "Assassin" -> 0.16f
-            "Shooter" -> 0.12f
-            "Thrower" -> 0.18f
-            else -> 0.10f
+        val leadTime = when (config.brawler) {
+            "Buzz" -> 0.13f
+            "Tick" -> 0.20f
+            else -> 0.12f
         }
-
         val leadX = ((target?.cx ?: lastTargetX) + vx * leadTime).coerceIn(0.02f, 0.98f)
         val leadY = ((target?.cy ?: lastTargetY) + vy * leadTime).coerceIn(0.02f, 0.98f)
 
         val closeThreat = if (target == null) 0f
         else (1f - nearest / 0.38f).coerceIn(0f, 1f)
 
-        val numericPressure = (
-            (enemies.size - teammates.size).coerceAtLeast(0) / 3f
-        ).coerceIn(0f, 1f)
-
-        val openFlank = enemies.count { enemy ->
-            kotlin.math.abs(enemy.cx - px) > 0.28f && kotlin.math.abs(enemy.cy - py) > 0.18f
-        } / 3f.coerceAtLeast(1f)
-        val allyDistance = teammates.minOfOrNull {
-            distance(target?.cx ?: px, target?.cy ?: py, it.cx, it.cy)
-        } ?: 1f
-        val isolation = if (target == null) 0f
-        else (1f - allyDistance / 0.42f).coerceIn(0f, 1f)
-
-        val cover = if (walls.isEmpty()) 0f else (
-            walls.count { it.label == "wall" || it.label == "close_bush" } / 6f
-        ).coerceIn(0f, 1f)
-
-        val roleRisk = when (config.role) {
-            "Assassin" -> 0.86f
-            "Tank" -> 0.72f
-            "Shooter" -> 0.52f
-            "Thrower" -> 0.44f
-            "Support" -> 0.38f
-            else -> 0.60f
+        val enemyPressure = (enemies.size / 3f).coerceIn(0f, 1f)
+        val allySupport = (teammates.size / 2f).coerceIn(0f, 1f)
+        val enemySpread = if (enemies.isEmpty()) 0f else {
+            val avg = enemies.map { distance(px, py, it.cx, it.cy) }.average().toFloat()
+            (1f - avg).coerceIn(0f, 1f)
         }
 
-        val modeRisk = when (config.gameMode) {
-            "Showdown", "Knockout", "Bounty" -> 0.14f
-            "Brawl Ball", "Heist" -> -0.08f
-            "Hot Zone", "Gem Grab" -> 0.02f
-            else -> 0f
+        val cover = if (walls.isEmpty()) 0f else
+            (walls.count { it.label == "wall" || it.label == "close_bush" } / 6f).coerceIn(0f, 1f)
+
+        val isolation = if (target == null || teammates.isEmpty()) 0f else {
+            val allyDistance = teammates.minOf {
+                distance(target.cx, target.cy, it.cx, it.cy)
+            }
+            (1f - allyDistance / 0.42f).coerceIn(0f, 1f)
         }
 
         val rawThreat = (
-            0.46f * closeThreat +
-            0.18f * numericPressure +
-            0.15f * openFlank +
-            0.12f * isolation +
-            0.09f * (1f - cover)
+            0.52f * closeThreat +
+            0.18f * enemyPressure +
+            0.16f * enemySpread +
+            0.08f * isolation +
+            0.06f * (1f - cover)
         ).coerceIn(0f, 1f)
 
-        stableThreat = stableThreat * 0.68f + rawThreat * 0.32f
-        val opportunity = (
-            0.38f * (1f - stableThreat) +
-            0.25f * if (target == null) 0f else target.confidence +
-            0.17f * (1f - numericPressure) +
+        stableThreat = stableThreat * 0.72f + rawThreat * 0.28f
+
+        val opportunityBase = (
+            0.44f * (1f - stableThreat) +
+            0.22f * (target?.confidence ?: 0f) +
+            0.16f * allySupport +
             0.10f * cover +
-            0.10f * roleRisk - modeRisk
+            0.08f * (1f - enemyPressure)
         ).coerceIn(0f, 1f)
 
-        val recommendation = when {
-            target == null -> Recommendation.RESET
-            stableThreat >= 0.72f -> Recommendation.RETREAT
-            opportunity >= 0.68f -> Recommendation.PRESSURE
-            nearest <= 0.22f -> Recommendation.TRACK
-            else -> Recommendation.HOLD
+        val opportunity = when (config.brawler) {
+            "Buzz" -> (opportunityBase + if (nearest in 0.16f..0.48f) 0.16f else 0f - if (nearest < 0.12f) 0.10f else 0f)
+                .coerceIn(0f, 1f)
+            "Tick" -> (opportunityBase + if (nearest > 0.35f) 0.12f else -0.08f)
+                .coerceIn(0f, 1f)
+            else -> opportunityBase
         }
 
-        val detail = when (recommendation) {
-            Recommendation.RETREAT -> "Отходи к укрытию; риск слишком высокий"
-            Recommendation.PRESSURE -> "Есть окно: цель уязвима, можно давить"
-            Recommendation.TRACK -> "Цель близко: следи за траекторией и не стой на месте"
-            Recommendation.HOLD -> "Держи угол и не отдавай пространство"
-            Recommendation.RESET -> "Мало информации: сначала найди противника"
-        }
+        val recommendation: Recommendation
+        val detail: String
 
-        val escapeAngle = when {
-            target == null -> 0f
+        when (config.brawler) {
+            "Buzz" -> when {
+                target == null -> {
+                    recommendation = Recommendation.RESET
+                    detail = "Ищи цель: держись рядом с укрытием и заряжай зону"
+                }
+                stableThreat >= 0.74f -> {
+                    recommendation = Recommendation.RETREAT
+                    detail = "Не входи сейчас: слишком много угроз вокруг цели"
+                }
+                nearest in 0.20f..0.52f && opportunity >= 0.62f -> {
+                    recommendation = Recommendation.PRESSURE
+                    detail = "ОКНО BUZZ: сближение выгодно, цель на рабочей дистанции"
+                }
+                nearest < 0.20f -> {
+                    recommendation = Recommendation.TRACK
+                    detail = "БУЗЗ: не стой в лобовой — двигайся вокруг цели"
+                }
+                else -> {
+                    recommendation = Recommendation.HOLD
+                    detail = "БУЗЗ: заряжай супер и жди удобный угол входа"
+                }
+            }
+            "Tick" -> when {
+                target == null -> {
+                    recommendation = Recommendation.RESET
+                    detail = "ТИК: держи дистанцию и ищи маршрут для мин"
+                }
+                stableThreat >= 0.62f && nearest < 0.46f -> {
+                    recommendation = Recommendation.RETREAT
+                    detail = "ТИК: отступай — враг слишком близко к опасной зоне"
+                }
+                nearest > 0.40f && opportunity >= 0.50f -> {
+                    recommendation = Recommendation.PRESSURE
+                    detail = "ТИК: ЗОНИРУЙ вход и бросай мины в прогнозируемый путь"
+                }
+                nearest < 0.30f -> {
+                    recommendation = Recommendation.TRACK
+                    detail = "ТИК: цель сблизилась — уходи диагонально, не назад по прямой"
+                }
+                else -> {
+                    recommendation = Recommendation.HOLD
+                    detail = "ТИК: держи дальнюю дистанцию и перекрывай пути отхода"
+                }
+            }
             else -> {
-                val ex = px - target.cx
-                val ey = py - target.cy
-                val m = max(0.001f, hypot(ex, ey))
-                ex / m
+                recommendation = when {
+                    target == null -> Recommendation.RESET
+                    stableThreat >= 0.72f -> Recommendation.RETREAT
+                    opportunity >= 0.66f -> Recommendation.PRESSURE
+                    nearest <= 0.22f -> Recommendation.TRACK
+                    else -> Recommendation.HOLD
+                }
+                detail = when (recommendation) {
+                    Recommendation.RETREAT -> "Отходи к безопасной позиции"
+                    Recommendation.PRESSURE -> "Есть окно для давления"
+                    Recommendation.TRACK -> "Следи за траекторией цели"
+                    Recommendation.HOLD -> "Держи позицию"
+                    Recommendation.RESET -> "Собери информацию о поле"
+                }
             }
         }
 
-        val escapeX = if (target == null) 0f else escapeAngle
-        val escapeY = if (target == null) 0f else {
-            val ey = py - target.cy
+        val escapeX: Float
+        val escapeY: Float
+        if (target == null) {
+            escapeX = 0f
+            escapeY = 0f
+        } else {
             val ex = px - target.cx
+            val ey = py - target.cy
             val m = max(0.001f, hypot(ex, ey))
-            ey / m
+            escapeX = ex / m
+            escapeY = ey / m
         }
 
         return BrainFrame(
@@ -172,7 +199,7 @@ class TacticalBrain {
             inferenceMs = inferenceMs,
             engine = engine,
             gameMode = config.gameMode,
-            role = config.role
+            role = config.brawler
         )
     }
 
