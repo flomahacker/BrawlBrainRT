@@ -274,7 +274,7 @@ class ProjectileThreatAnalyzer {
                 val x = (gx + ox).coerceIn(0, gridW - 1)
                 val y = (gy + oy).coerceIn(0, gridH - 1)
                 val i = y * gridW + x
-                total += abs(current[i].toInt() - old[i].toInt())
+                total += abs((current[i].toInt() and 0xFF) - (old[i].toInt() and 0xFF))
                 count++
             }
         }
@@ -306,8 +306,8 @@ class ProjectileThreatAnalyzer {
                 val oyy = (oy + dy).coerceIn(0, gridH - 1)
 
                 total += abs(
-                    current[cyy * gridW + cxx].toInt() -
-                        old[oyy * gridW + oxx].toInt()
+                    (current[cyy * gridW + cxx].toInt() and 0xFF) -
+                        (old[oyy * gridW + oxx].toInt() and 0xFF)
                 )
                 count++
             }
