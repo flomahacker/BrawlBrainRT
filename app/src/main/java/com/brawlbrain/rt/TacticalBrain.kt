@@ -199,7 +199,7 @@ class TacticalBrain {
             inferenceMs = inferenceMs,
             engine = engine,
             gameMode = config.gameMode,
-            role = config.brawler
+            role = config.role
         )
     }
 
