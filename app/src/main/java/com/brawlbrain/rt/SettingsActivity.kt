@@ -83,9 +83,10 @@ class SettingsActivity : Activity() {
         addToggle("Минимум анимаций", "motion", cfg.reducedMotion)
 
         addSection("ДАЛЬНОСТЬ")
+        val buzzRange = BrawlerCombatTable.profile("Buzz").attackRangeRaw
+        val tickRange = BrawlerCombatTable.profile("Tick").attackRangeRaw
         root.addView(body(
-            "Buzz: \${BrawlerCombatTable.profile("Buzz").attackRangeRaw} raw • " +
-                "Tick: \${BrawlerCombatTable.profile("Tick").attackRangeRaw} raw. " +
+            "Buzz: " + buzzRange + " raw • Tick: " + tickRange + " raw. " +
                 "Масштаб экрана хранится в конфиге; радиус выбранного бойца синхронизируется автоматически."
         ))
 
