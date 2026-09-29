@@ -19,7 +19,11 @@ data class BrainConfig(
     val showAdvice: Boolean = true,
     val showDebug: Boolean = false,
     val reducedMotion: Boolean = true,
-    val frameLongEdge: Int = 720
+    val frameLongEdge: Int = 720,
+    val autoDodge: Boolean = false,
+    val dodgeStrengthPercent: Int = 72,
+    val dodgeReactionMs: Long = 260L,
+    val dodgeCooldownMs: Long = 420L
 )
 
 object BrainPrefs {
@@ -40,6 +44,10 @@ object BrainPrefs {
     private const val SHOW_ADVICE = "show_advice"
     private const val SHOW_DEBUG = "show_debug"
     private const val REDUCED_MOTION = "reduced_motion"
+    private const val AUTO_DODGE = "auto_dodge"
+    private const val DODGE_STRENGTH = "dodge_strength"
+    private const val DODGE_REACTION = "dodge_reaction"
+    private const val DODGE_COOLDOWN = "dodge_cooldown"
 
     fun load(context: Context): BrainConfig {
         val p = context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
@@ -78,7 +86,11 @@ object BrainPrefs {
             showAdvice = p.getBoolean(SHOW_ADVICE, true),
             showDebug = p.getBoolean(SHOW_DEBUG, false),
             reducedMotion = p.getBoolean(REDUCED_MOTION, true),
-            frameLongEdge = defaultEdge
+            frameLongEdge = defaultEdge,
+            autoDodge = p.getBoolean(AUTO_DODGE, false),
+            dodgeStrengthPercent = p.getInt(DODGE_STRENGTH, 72),
+            dodgeReactionMs = p.getLong(DODGE_REACTION, 260L),
+            dodgeCooldownMs = p.getLong(DODGE_COOLDOWN, 420L)
         )
     }
 
@@ -101,6 +113,10 @@ object BrainPrefs {
             .putBoolean(SHOW_ADVICE, config.showAdvice)
             .putBoolean(SHOW_DEBUG, config.showDebug)
             .putBoolean(REDUCED_MOTION, config.reducedMotion)
+            .putBoolean(AUTO_DODGE, config.autoDodge)
+            .putInt(DODGE_STRENGTH, config.dodgeStrengthPercent)
+            .putLong(DODGE_REACTION, config.dodgeReactionMs)
+            .putLong(DODGE_COOLDOWN, config.dodgeCooldownMs)
             .apply()
     }
 
