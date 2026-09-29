@@ -39,7 +39,11 @@ class OverlayView(context: Context) : View(context) {
         canvas.scale(scale, scale)
 
         val panelW = 560f
-        val panelH = if (config.showDebug) 202f else 170f
+        val panelH = when {
+            frame.projectileDetected -> 232f
+            config.showDebug || config.autoDodge -> 202f
+            else -> 170f
+        }
         drawPanel(canvas, 22f, 22f, panelW, panelH)
         drawHeader(canvas)
 
