@@ -167,6 +167,14 @@ class DodgeBrain {
         )
     }
 
+    private fun resetWhenOff(enabled: Boolean) {
+        if (enabled) return
+        lastEnemy = null
+        lastAt = 0L
+        lastDodgeAt = 0L
+        side = 1f
+    }
+
     private fun distance(a: Detection, b: Detection): Float =
         (hypot(a.cx - b.cx, a.cy - b.cy) * 1.45f).coerceIn(0f, 1f)
 }
