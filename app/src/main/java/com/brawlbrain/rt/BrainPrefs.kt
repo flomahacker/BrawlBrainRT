@@ -4,6 +4,7 @@ import android.content.Context
 
 data class BrainConfig(
     val brawler: String = "Buzz",
+    val role: String = "Universal",
     val gameMode: String = "Universal",
     val performance: String = "12X Smooth",
     val entityIntervalMs: Long = 155L,
@@ -29,6 +30,7 @@ data class BrainConfig(
 object BrainPrefs {
     private const val NAME = "brawlbrain"
     private const val BRAWLER = "brawler"
+    private const val ROLE = "role"
     private const val MODE = "mode"
     private const val PERFORMANCE = "performance"
     private const val ENTITY_INTERVAL = "entity_interval"
@@ -71,6 +73,7 @@ object BrainPrefs {
 
         return BrainConfig(
             brawler = p.getString(BRAWLER, "Buzz") ?: "Buzz",
+            role = p.getString(ROLE, "Universal") ?: "Universal",
             gameMode = p.getString(MODE, "Universal") ?: "Universal",
             performance = performance,
             entityIntervalMs = p.getLong(ENTITY_INTERVAL, defaultEntity),
@@ -98,6 +101,7 @@ object BrainPrefs {
         context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(BRAWLER, config.brawler)
+            .putString(ROLE, config.role)
             .putString(MODE, config.gameMode)
             .putString(PERFORMANCE, config.performance)
             .putLong(ENTITY_INTERVAL, config.entityIntervalMs)
