@@ -58,6 +58,11 @@ class OverlayView(context: Context) : View(context) {
             frame.target?.let { drawTargetGuide(canvas, it) }
         }
 
+        if (config.showAdvice) {
+            drawIntelFocus(canvas)
+            drawActionArrow(canvas)
+        }
+
         canvas.restore()
     }
 
@@ -211,6 +216,56 @@ class OverlayView(context: Context) : View(context) {
         val bottom = (d.cy + d.height / 2f) * height
 
         canvas.drawRoundRect(RectF(left, top, right, bottom), 12f, 12f, p)
+    }
+
+    private fun drawIntelFocus(canvas: Canvas) {
+        if (frame.intelFocusScore < 0.30f || width <= 0 || height <= 0) return
+
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 3.5f
+            color = if (frame.fireWindow >= 0.70f) 0xFF7DFF9A.toInt() else 0xFFFFD166.toInt()
+        }
+        val x = frame.intelFocusX * width
+        val y = frame.intelFocusY * height
+        canvas.drawCircle(x, y, 34f, p)
+        canvas.drawCircle(x, y, 40f, p.apply { alpha = 90 })
+    }
+
+    private fun drawActionArrow(canvas: Canvas) {
+        val player = frame.player ?: return
+        val ax = frame.actionX
+        val ay = frame.actionY
+        val len = kotlin.math.hypot(ax.toDouble(), ay.toDouble()).toFloat()
+        if (len < 0.25f) return
+
+        val px = player.cx * width
+        val py = player.cy * height
+        val scalePx = 72f
+        val ex = px + (ax / len) * scalePx
+        val ey = py + (ay / len) * scalePx
+        val angle = atan2(ey - py, ex - px)
+        val size = 18f
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 5f
+            strokeCap = Paint.Cap.ROUND
+            color = accentColor()
+        }
+        canvas.drawLine(px, py, ex, ey, paint)
+
+        val head = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = accentColor()
+        }
+        val path = Path().apply {
+            moveTo(ex, ey)
+            lineTo(ex - cos(angle - 0.55f) * size, ey - sin(angle - 0.55f) * size)
+            lineTo(ex - cos(angle + 0.55f) * size, ey - sin(angle + 0.55f) * size)
+            close()
+        }
+        canvas.drawPath(path, head)
     }
 
     private fun drawTargetGuide(canvas: Canvas, target: Detection) {
