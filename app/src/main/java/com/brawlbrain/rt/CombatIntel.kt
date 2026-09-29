@@ -61,9 +61,17 @@ class CombatIntel {
         val scored = enemies.map { enemy ->
             val d = hypot(enemy.cx - player.cx, enemy.cy - player.cy)
             val previous = nearestTrack(enemy, now)
-            val dt = if (previous == null) 0.10f else ((now - previous.at).coerceIn(40L, 250L) / 1000f)
-            val vx = if (previous == null) 0f else (enemy.cx - previous.x) / dt
-            val vy = if (previous == null) 0f else (enemy.cy - previous.y) / dt
+            val dt = if (previous == null) {
+                0.10f
+            } else {
+                ((now - previous.at).coerceIn(40L, 250L) / 1000f)
+            }
+
+            val vx = if (previous == null) 0f
+            else ((enemy.cx - previous.x) / dt).coerceIn(-2.5f, 2.5f)
+
+            val vy = if (previous == null) 0f
+            else ((enemy.cy - previous.y) / dt).coerceIn(-2.5f, 2.5f)
 
             val lineLen = d.coerceAtLeast(0.001f)
             val ux = (player.cx - enemy.cx) / lineLen
@@ -96,92 +104,136 @@ class CombatIntel {
             1f - abs(best.closing).coerceIn(0f, 1f) * 0.35f
         )
 
-        val actionX: Float
-        val actionY: Float
+        val toTarget = direction(
+            player.cx, player.cy,
+            best.enemy.cx, best.enemy.cy
+        )
+        val awayFromTarget = Pair(-toTarget.first, -toTarget.second)
+        val lateral = Pair(-toTarget.second, toTarget.first)
+        val predictedTarget = Pair(
+            (best.enemy.cx + best.vx * 0.18f).coerceIn(0.04f, 0.96f),
+            (best.enemy.cy + best.vy * 0.18f).coerceIn(0.04f, 0.96f)
+        )
+
+        val action: Pair<Float, Float>
         val title: String
         val detail: String
 
         if (projectileUrgent) {
-            val dx = player.cx - best.enemy.cx
-            val dy = player.cy - best.enemy.cy
-            val len = max(0.001f, hypot(dx, dy))
-            actionX = -dy / len
-            actionY = dx / len
+            val side = if (best.vx * lateral.first + best.vy * lateral.second >= 0f) {
+                -1f
+            } else {
+                1f
+            }
+            action = Pair(
+                lateral.first * side * 0.92f + awayFromTarget.first * 0.16f,
+                lateral.second * side * 0.92f + awayFromTarget.second * 0.16f
+            )
             title = "СНАРЯД"
             detail = "Сместись поперёк линии огня • ETA " + (projectile?.etaMs ?: 0) + " мс"
         } else {
             when (brawler) {
                 "Buzz" -> when {
                     best.distance < 0.34f && best.isolation > 0.52f -> {
-                        actionX = 0f
-                        actionY = 0f
+                        action = toTarget
                         title = "ОКНО BUZZ"
                         detail = "Цель изолирована — хороший момент для входа или супер-цепочки"
                     }
+
                     best.distance < 0.42f && best.closing > 0.35f -> {
-                        actionX = -best.vy
-                        actionY = best.vx
+                        val side = if (
+                            best.vx * lateral.first + best.vy * lateral.second >= 0f
+                        ) -1f else 1f
+                        action = Pair(
+                            lateral.first * side * 0.88f + toTarget.first * 0.20f,
+                            lateral.second * side * 0.88f + toTarget.second * 0.20f
+                        )
                         title = "НЕ ЛОВИ ЛОБ"
-                        detail = "Враг сокращает дистанцию — сместись поперёк и контратакуй"
+                        detail = "Враг сокращает дистанцию — смести угол и контратакуй"
                     }
+
                     best.isolation < 0.30f && best.distance < 0.58f -> {
-                        actionX = 0f
-                        actionY = 0f
+                        action = awayFromTarget
                         title = "НЕ ВХОДИ"
-                        detail = "Цель прикрыта — дождись, пока союзники отделятся"
+                        detail = "Цель прикрыта — выйди из прямого размена"
                     }
+
                     else -> {
-                        actionX = 0f
-                        actionY = 0f
+                        val flankPoint = Pair(
+                            (best.enemy.cx + lateral.first * 0.24f).coerceIn(0.04f, 0.96f),
+                            (best.enemy.cy + lateral.second * 0.24f).coerceIn(0.04f, 0.96f)
+                        )
+                        action = direction(
+                            player.cx, player.cy,
+                            flankPoint.first, flankPoint.second
+                        )
                         title = "ЖДИ УГОЛ"
-                        detail = "Ищи изолированную цель вместо прямого размена"
+                        detail = "Сместись к углу и дождись изоляции цели"
                     }
                 }
 
                 "Tick" -> when {
                     best.distance < 0.30f -> {
-                        val dx = player.cx - best.enemy.cx
-                        val dy = player.cy - best.enemy.cy
-                        val len = max(0.001f, hypot(dx, dy))
-                        actionX = dx / len
-                        actionY = dy / len
+                        action = awayFromTarget
                         title = "RESET"
-                        detail = "Враг слишком близко — отходи диагонально"
+                        detail = "Враг слишком близко — немедленно разрывай дистанцию"
                     }
+
                     best.isolation > 0.50f && best.distance > 0.36f -> {
-                        actionX = best.vx
-                        actionY = best.vy
+                        action = direction(
+                            player.cx, player.cy,
+                            predictedTarget.first, predictedTarget.second
+                        )
                         title = "ЗАКРОЙ ПУТЬ"
-                        detail = "Цель изолирована — ставь мины перед её направлением движения"
+                        detail = "Цель изолирована — перекрой её следующий маршрут"
                     }
+
                     enemies.size >= 2 && best.distance > 0.34f -> {
-                        actionX = 0f
-                        actionY = 0f
+                        var centerX = 0f
+                        var centerY = 0f
+                        enemies.take(3).forEach {
+                            centerX += it.cx
+                            centerY += it.cy
+                        }
+                        val count = minOf(enemies.size, 3)
+                        centerX /= count
+                        centerY /= count
+
+                        action = direction(
+                            player.cx, player.cy,
+                            centerX, centerY
+                        )
                         title = "ЗОНИРУЙ"
-                        detail = "Не гонись за одной целью — перекрой общий маршрут группы"
+                        detail = "Держи пространство между несколькими целями"
                     }
+
                     else -> {
-                        actionX = 0f
-                        actionY = 0f
+                        action = normalize(
+                            lateral.first * 0.72f + awayFromTarget.first * 0.35f,
+                            lateral.second * 0.72f + awayFromTarget.second * 0.35f
+                        )
                         title = "ДАЛЬНЯЯ ЗОНА"
-                        detail = "Сохраняй дистанцию и наказывай предсказуемое движение"
+                        detail = "Сохраняй дистанцию и вынуждай врага идти по предсказуемой линии"
                     }
                 }
 
                 else -> {
-                    actionX = 0f
-                    actionY = 0f
-                    title = if (fireWindow >= 0.70f) "ОКНО ВЫСТРЕЛА" else "ФОКУС"
-                    detail = if (fireWindow >= 0.70f) {
-                        "Цель сейчас движется мало — хороший момент для твоего выстрела"
+                    if (fireWindow >= 0.70f) {
+                        action = toTarget
+                        title = "ОКНО ВЫСТРЕЛА"
+                        detail = "Цель сейчас движется мало — открывай огонь"
                     } else {
-                        "Фокус на самой опасной цели по дистанции и давлению"
+                        action = lateral
+                        title = "ФОКУС"
+                        detail = "Сместись на линию атаки выбранной цели"
                     }
                 }
             }
         }
 
         remember(enemies, now)
+
+        val safeAction = normalize(action.first, action.second)
 
         return CombatIntelResult(
             title,
@@ -190,9 +242,26 @@ class CombatIntel {
             best.score,
             best.enemy.cx,
             best.enemy.cy,
-            actionX.coerceIn(-1f, 1f),
-            actionY.coerceIn(-1f, 1f),
+            safeAction.first,
+            safeAction.second,
             fireWindow
+        )
+    }
+
+    private fun direction(
+        fromX: Float,
+        fromY: Float,
+        toX: Float,
+        toY: Float
+    ): Pair<Float, Float> {
+        return normalize(toX - fromX, toY - fromY)
+    }
+
+    private fun normalize(x: Float, y: Float): Pair<Float, Float> {
+        val len = max(0.001f, hypot(x, y))
+        return Pair(
+            (x / len).coerceIn(-1f, 1f),
+            (y / len).coerceIn(-1f, 1f)
         )
     }
 
