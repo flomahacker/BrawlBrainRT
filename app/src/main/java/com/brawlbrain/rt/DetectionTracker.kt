@@ -210,8 +210,8 @@ class DetectionTracker {
 
             visuals += EnemyTrackVisual(
                 id = track.id,
-                x = d.cx,
-                y = d.cy,
+                x = visualX,
+                y = visualY,
                 predictedX = predictedX,
                 predictedY = predictedY,
                 vx = track.kx.velocity,
@@ -219,7 +219,7 @@ class DetectionTracker {
                 confidence = track.confidence.coerceIn(0f, 1f),
                 visible = isVisible,
                 ageMs = ageMs,
-                ageText = "\${(ageMs / 1000L).coerceIn(0L, 5L)}s",
+                ageText = (ageMs / 1000L).coerceIn(0L, 5L).toString() + "s",
                 idText = "#${track.id}"
             )
         }
