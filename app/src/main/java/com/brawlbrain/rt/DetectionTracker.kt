@@ -68,7 +68,6 @@ class DetectionTracker(
                 ky.predict(dt)
                 lastUpdateAt = now
             }
-            visible = false
         }
 
         fun update(d: Detection, now: Long) {
@@ -113,7 +112,7 @@ class DetectionTracker(
         nextId = 1
     }
 
-    fun update(detections: List<Detection>, now: Long): Snapshot {
+    fun update(detections: List<Detection>, now: Long, predictionLeadMs: Long = 380L): Snapshot {
         for (track in tracks) track.predict(now)
 
         val candidates = detections
@@ -169,16 +168,16 @@ class DetectionTracker(
         }
 
         tracks.removeAll { now - it.lastSeenAt > ghostTtlMs }
-        return snapshot(now)
+        return snapshot(now, predictionLeadMs)
     }
 
-    fun predictOnly(now: Long): Snapshot {
+    fun predictOnly(now: Long, predictionLeadMs: Long = 380L): Snapshot {
         for (track in tracks) track.predict(now)
         tracks.removeAll { now - it.lastSeenAt > ghostTtlMs }
-        return snapshot(now)
+        return snapshot(now, predictionLeadMs)
     }
 
-    private fun snapshot(now: Long): Snapshot {
+    private fun snapshot(now: Long, predictionLeadMs: Long): Snapshot {
         val visible = ArrayList<Detection>(tracks.size)
         val visuals = ArrayList<EnemyTrackVisual>(tracks.size)
 
@@ -189,7 +188,7 @@ class DetectionTracker(
 
             if (isVisible) visible += d
 
-            val leadSeconds = 0.38f
+            val leadSeconds = (predictionLeadMs.coerceIn(300L, 500L) / 1000f)
             val predictedX = track.kx.position + track.kx.velocity * leadSeconds
             val predictedY = track.ky.position + track.ky.velocity * leadSeconds
 
