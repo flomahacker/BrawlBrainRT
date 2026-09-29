@@ -18,6 +18,7 @@ import android.widget.*
 
 class MainActivity : Activity() {
 
+    private lateinit var root: LinearLayout
     private lateinit var status: TextView
     private lateinit var modeSpinner: Spinner
     private lateinit var roleSpinner: Spinner
@@ -41,7 +42,7 @@ class MainActivity : Activity() {
             setBackgroundColor(0xFF080A10.toInt())
         }
 
-        val root = LinearLayout(this).apply {
+        root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(24, 30, 24, 36)
         }
