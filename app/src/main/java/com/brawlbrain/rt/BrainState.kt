@@ -33,7 +33,13 @@ data class BrainFrame(
     val role: String,
     val projectileThreat: Float = 0f,
     val projectileEtaMs: Int = 0,
-    val projectileDetected: Boolean = false
+    val projectileDetected: Boolean = false,
+    val intelActionTitle: String = "ФОКУС",
+    val intelActionDetail: String = "Собери информацию о поле",
+    val intelFocusX: Float = 0.5f,
+    val intelFocusY: Float = 0.5f,
+    val intelFocusScore: Float = 0f,
+    val fireWindow: Float = 0f
 )
 
 enum class Recommendation(val title: String) {
