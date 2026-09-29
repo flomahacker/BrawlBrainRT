@@ -361,6 +361,10 @@ class OverlayView(context: Context) : View(context) {
         mix(next.warning.type.ordinal.toLong())
         mix(next.hud.superReady.compareTo(false).toLong())
         mix((next.hud.ammo + 2).toLong())
+        next.player?.let {
+            mix((it.cx * 1000f).toInt().toLong())
+            mix((it.cy * 1000f).toInt().toLong())
+        }
 
         for (t in next.trackVisuals) {
             mix(t.id.toLong())
