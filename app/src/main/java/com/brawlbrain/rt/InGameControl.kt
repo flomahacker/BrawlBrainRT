@@ -200,6 +200,7 @@ class InGameControl(
             setOnClickListener {
                 val updated = cfg.copy(
                     brawler = brawler.selectedItem.toString(),
+                    attackRangeRaw = BrawlerCombatTable.profile(brawler.selectedItem.toString()).attackRangeRaw,
                     autoDodge = dodge.isChecked,
                     dodgeStrengthPercent = 35 + strength.progress,
                     showTargetLine = target.isChecked,
