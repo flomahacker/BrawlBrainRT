@@ -443,8 +443,6 @@ class ScreenBrainService : Service() {
                             overlay?.submit(displayFrame)
                         }
                     }
-
-                    }
                 }
             }
         } catch (_: Throwable) {
