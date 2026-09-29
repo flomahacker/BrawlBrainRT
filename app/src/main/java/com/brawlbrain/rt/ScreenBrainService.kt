@@ -79,11 +79,14 @@ class ScreenBrainService : Service() {
                 entityLabels,
                 confidenceThreshold = config.confidencePercent / 100f
             )
-            wallDetector = YoloOnnxDetector(
-                assets.open("models/PylaWallDetectorV2.onnx").use { it.readBytes() },
-                wallLabels,
-                confidenceThreshold = (config.confidencePercent - 4).coerceAtLeast(16) / 100f
-            )
+
+            if (config.showWalls) {
+                wallDetector = YoloOnnxDetector(
+                    assets.open("models/PylaWallDetectorV2.onnx").use { it.readBytes() },
+                    wallLabels,
+                    confidenceThreshold = (config.confidencePercent - 4).coerceAtLeast(16) / 100f
+                )
+            }
         } catch (_: Throwable) {
             mainHandler.post {
                 overlay?.contentDescription = "YOLO не загрузился"
@@ -246,9 +249,14 @@ class ScreenBrainService : Service() {
                 latestEntities = entityDetector.detect(frame)
 
                 val wallNow = SystemClock.elapsedRealtime()
-                if (wallNow - lastWallAt >= config.wallIntervalMs) {
+                if (config.showWalls &&
+                    ::wallDetector.isInitialized &&
+                    wallNow - lastWallAt >= config.wallIntervalMs
+                ) {
                     latestWalls = wallDetector.detect(frame)
                     lastWallAt = wallNow
+                } else if (!config.showWalls) {
+                    latestWalls = emptyList()
                 }
 
                 val t1 = SystemClock.elapsedRealtime()
