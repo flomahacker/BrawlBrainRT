@@ -33,6 +33,7 @@ class ScreenBrainService : Service() {
 
     private lateinit var windowManager: WindowManager
     private var overlay: OverlayView? = null
+    private var inGameControl: InGameControl? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var worker: HandlerThread
@@ -72,6 +73,13 @@ class ScreenBrainService : Service() {
         startBrainForeground()
         running = true
         attachOverlay()
+        inGameControl = InGameControl(this, windowManager) { updated ->
+            config = updated
+            overlay?.updateConfig(updated)
+        }
+        if (Settings.canDrawOverlays(this)) {
+            inGameControl?.show()
+        }
 
         try {
             entityDetector = YoloOnnxDetector(
@@ -312,6 +320,8 @@ class ScreenBrainService : Service() {
     override fun onDestroy() {
         running = false
 
+        try { inGameControl?.hide() } catch (_: Throwable) {}
+        inGameControl = null
         try { overlay?.let { windowManager.removeView(it) } } catch (_: Throwable) {}
         overlay = null
 
