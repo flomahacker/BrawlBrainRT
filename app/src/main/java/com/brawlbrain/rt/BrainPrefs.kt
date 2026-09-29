@@ -21,9 +21,9 @@ data class BrainConfig(
     val reducedMotion: Boolean = true,
     val frameLongEdge: Int = 720,
     val autoDodge: Boolean = false,
-    val dodgeStrengthPercent: Int = 72,
-    val dodgeReactionMs: Long = 260L,
-    val dodgeCooldownMs: Long = 420L
+    val dodgeStrengthPercent: Int = 82,
+    val dodgeReactionMs: Long = 90L,
+    val dodgeCooldownMs: Long = 90L
 )
 
 object BrainPrefs {
@@ -88,9 +88,9 @@ object BrainPrefs {
             reducedMotion = p.getBoolean(REDUCED_MOTION, true),
             frameLongEdge = defaultEdge,
             autoDodge = p.getBoolean(AUTO_DODGE, false),
-            dodgeStrengthPercent = p.getInt(DODGE_STRENGTH, 72),
-            dodgeReactionMs = p.getLong(DODGE_REACTION, 260L),
-            dodgeCooldownMs = p.getLong(DODGE_COOLDOWN, 420L)
+            dodgeStrengthPercent = p.getInt(DODGE_STRENGTH, 82).coerceIn(35, 100),
+            dodgeReactionMs = p.getLong(DODGE_REACTION, 90L).coerceIn(45L, 250L),
+            dodgeCooldownMs = p.getLong(DODGE_COOLDOWN, 90L).coerceIn(60L, 260L)
         )
     }
 
@@ -114,9 +114,9 @@ object BrainPrefs {
             .putBoolean(SHOW_DEBUG, config.showDebug)
             .putBoolean(REDUCED_MOTION, config.reducedMotion)
             .putBoolean(AUTO_DODGE, config.autoDodge)
-            .putInt(DODGE_STRENGTH, config.dodgeStrengthPercent)
-            .putLong(DODGE_REACTION, config.dodgeReactionMs)
-            .putLong(DODGE_COOLDOWN, config.dodgeCooldownMs)
+            .putInt(DODGE_STRENGTH, config.dodgeStrengthPercent.coerceIn(35, 100))
+            .putLong(DODGE_REACTION, config.dodgeReactionMs.coerceIn(45L, 250L))
+            .putLong(DODGE_COOLDOWN, config.dodgeCooldownMs.coerceIn(60L, 260L))
             .apply()
     }
 
