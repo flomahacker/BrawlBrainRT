@@ -74,9 +74,11 @@ class TacticalBrain {
         val openFlank = enemies.count { enemy ->
             kotlin.math.abs(enemy.cx - px) > 0.28f && kotlin.math.abs(enemy.cy - py) > 0.18f
         } / 3f.coerceAtLeast(1f)
-        val isolation = if (target == null) 0f else (
-            1f - teammates.minOfOrNull { distance(target.cx, target.cy, it.cx, it.cy) }?.div(0.42f) ?: 1f
-        ).coerceIn(0f, 1f)
+        val allyDistance = teammates.minOfOrNull {
+            distance(target?.cx ?: px, target?.cy ?: py, it.cx, it.cy)
+        } ?: 1f
+        val isolation = if (target == null) 0f
+        else (1f - allyDistance / 0.42f).coerceIn(0f, 1f)
 
         val cover = if (walls.isEmpty()) 0f else (
             walls.count { it.label == "wall" || it.label == "close_bush" } / 6f
