@@ -46,6 +46,7 @@ class ScreenBrainService : Service() {
     private lateinit var wallDetector: YoloOnnxDetector
     private val brain = TacticalBrain()
     private val dodgeBrain = DodgeBrain()
+    private val projectileAnalyzer = ProjectileThreatAnalyzer()
 
     private val busy = AtomicBoolean(false)
     private var lastEntityAt = 0L
@@ -58,6 +59,7 @@ class ScreenBrainService : Service() {
     private var latestWalls = emptyList<Detection>()
     private var latestFps = 0f
     private var latestInferenceMs = 0L
+    @Volatile private var latestSnapshot: BrainFrame? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -182,7 +184,7 @@ class ScreenBrainService : Service() {
             captureW,
             captureH,
             PixelFormat.RGBA_8888,
-            2
+            3
         )
 
         reader.setOnImageAvailableListener(
@@ -210,17 +212,6 @@ class ScreenBrainService : Service() {
             return
         }
 
-        // Dedicated low-latency entity tick while Dodge is armed.
-        val dodgeVisionInterval = if (config.autoDodge) 68L else config.entityIntervalMs
-
-        if (now - lastEntityAt < dodgeVisionInterval) {
-            ir.acquireLatestImage()?.close()
-            busy.set(false)
-            return
-        }
-
-        lastEntityAt = now
-
         val image = ir.acquireLatestImage()
         if (image == null) {
             busy.set(false)
@@ -229,93 +220,150 @@ class ScreenBrainService : Service() {
 
         try {
             image.use {
-                val plane = it.planes[0]
-                val buffer: ByteBuffer = plane.buffer
-                val pixelStride = plane.pixelStride
-                val rowStride = plane.rowStride
-                val rowPadding = rowStride - pixelStride * captureW
-                val rawWidth = captureW + rowPadding / pixelStride.coerceAtLeast(1)
+                val dodgeEnabled = config.autoDodge
+                val cached = latestSnapshot
 
-                val raw = Bitmap.createBitmap(
-                    rawWidth,
-                    captureH,
-                    Bitmap.Config.ARGB_8888
-                )
-                raw.copyPixelsFromBuffer(buffer)
-
-                val frame =
-                    if (rawWidth == captureW) {
-                        raw
-                    } else {
-                        val cropped = Bitmap.createBitmap(
-                            captureW,
-                            captureH,
-                            Bitmap.Config.ARGB_8888
-                        )
-                        Canvas(cropped).drawBitmap(raw, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG))
-                        raw.recycle()
-                        cropped
-                    }
-
-                val t0 = SystemClock.elapsedRealtime()
-
-                latestEntities = entityDetector.detect(frame)
-
-                val wallNow = SystemClock.elapsedRealtime()
-                if (config.showWalls &&
-                    ::wallDetector.isInitialized &&
-                    wallNow - lastWallAt >= config.wallIntervalMs
-                ) {
-                    latestWalls = wallDetector.detect(frame)
-                    lastWallAt = wallNow
-                } else if (!config.showWalls) {
-                    latestWalls = emptyList()
+                // This layer runs on every available screen frame when Dodge is ON.
+                // It uses a tiny grayscale grid instead of another neural network.
+                val projectileThreat = if (dodgeEnabled) {
+                    projectileAnalyzer.analyze(
+                        it,
+                        captureW,
+                        captureH,
+                        cached?.player,
+                        cached?.enemies ?: latestEntities.filter { d -> d.label == "enemy" }
+                            .take(3),
+                        now
+                    )
+                } else {
+                    projectileAnalyzer.reset()
+                    null
                 }
 
-                val t1 = SystemClock.elapsedRealtime()
-                latestInferenceMs = t1 - t0
-                latestFps =
-                    if (lastInferenceAt == 0L) 0f
-                    else 1000f / (t1 - lastInferenceAt).coerceAtLeast(1L)
-                lastInferenceAt = t1
+                val dodgeVisionInterval = if (dodgeEnabled) 68L else config.entityIntervalMs
+                val runYolo = now - lastEntityAt >= dodgeVisionInterval
 
-                val snapshot = brain.decide(
-                    latestEntities,
-                    latestWalls,
-                    latestFps,
-                    latestInferenceMs,
-                    "YOLOv11",
-                    config
-                )
+                var snapshot = latestSnapshot
 
-                val dodge = dodgeBrain.decide(
-                    snapshot.player,
-                    snapshot.enemies,
-                    t1,
-                    config
-                )
+                if (runYolo) {
+                    lastEntityAt = now
 
-                if (dodge.shouldDodge) {
-                    val controller = DodgeAccessibilityService.instance
-                    if (controller != null) {
-                        mainHandler.post {
-                            controller.dodge(
-                                dodge.x,
-                                dodge.y,
-                                config.dodgeStrengthPercent / 100f
+                    val plane = it.planes[0]
+                    val buffer: ByteBuffer = plane.buffer
+                    val pixelStride = plane.pixelStride
+                    val rowStride = plane.rowStride
+                    val rowPadding = rowStride - pixelStride * captureW
+                    val rawWidth = captureW + rowPadding / pixelStride.coerceAtLeast(1)
+
+                    val raw = Bitmap.createBitmap(
+                        rawWidth,
+                        captureH,
+                        Bitmap.Config.ARGB_8888
+                    )
+                    raw.copyPixelsFromBuffer(buffer)
+
+                    val frame =
+                        if (rawWidth == captureW) {
+                            raw
+                        } else {
+                            val cropped = Bitmap.createBitmap(
+                                captureW,
+                                captureH,
+                                Bitmap.Config.ARGB_8888
                             )
+                            Canvas(cropped).drawBitmap(
+                                raw,
+                                0f,
+                                0f,
+                                Paint(Paint.FILTER_BITMAP_FLAG)
+                            )
+                            raw.recycle()
+                            cropped
+                        }
+
+                    try {
+                        val t0 = SystemClock.elapsedRealtime()
+
+                        latestEntities = entityDetector.detect(frame)
+
+                        val wallNow = SystemClock.elapsedRealtime()
+                        if (config.showWalls &&
+                            ::wallDetector.isInitialized &&
+                            wallNow - lastWallAt >= config.wallIntervalMs
+                        ) {
+                            latestWalls = wallDetector.detect(frame)
+                            lastWallAt = wallNow
+                        } else if (!config.showWalls) {
+                            latestWalls = emptyList()
+                        }
+
+                        val t1 = SystemClock.elapsedRealtime()
+                        latestInferenceMs = t1 - t0
+
+                        latestFps =
+                            if (lastInferenceAt == 0L) 0f
+                            else 1000f / (t1 - lastInferenceAt).coerceAtLeast(1L)
+                        lastInferenceAt = t1
+
+                        snapshot = brain.decide(
+                            latestEntities,
+                            latestWalls,
+                            latestFps,
+                            latestInferenceMs,
+                            "YOLOv11",
+                            config
+                        )
+                        latestSnapshot = snapshot
+                    } finally {
+                        frame.recycle()
+                    }
+                }
+
+                val active = snapshot
+                if (active != null) {
+                    // The normal predictive dodge updates on fresh YOLO detections.
+                    // The emergency projectile path can interrupt on any screen frame.
+                    if (runYolo || projectileThreat?.urgent == true) {
+                        val dodge = dodgeBrain.decide(
+                            active.player,
+                            active.enemies,
+                            now,
+                            config,
+                            projectileThreat
+                        )
+
+                        if (dodge.shouldDodge && config.autoDodge) {
+                            val controller = DodgeAccessibilityService.instance
+                            if (controller != null) {
+                                mainHandler.postAtFrontOfQueue {
+                                    if (config.autoDodge) {
+                                        controller.dodge(
+                                            dodge.x,
+                                            dodge.y,
+                                            config.dodgeStrengthPercent / 100f
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // HUD updates stay on YOLO cadence to avoid visual jitter.
+                    // An urgent projectile event is pushed immediately.
+                    if (runYolo || projectileThreat?.urgent == true) {
+                        val displayFrame = active.copy(
+                            projectileThreat = projectileThreat?.score ?: 0f,
+                            projectileEtaMs = projectileThreat?.etaMs ?: 0,
+                            projectileDetected = projectileThreat?.detected == true
+                        )
+                        mainHandler.post {
+                            overlay?.submit(displayFrame)
                         }
                     }
                 }
-
-                mainHandler.post {
-                    overlay?.submit(snapshot)
-                }
-
-                frame.recycle()
             }
         } catch (_: Throwable) {
-            // One bad frame must not terminate real-time vision.
+            // One malformed capture must never kill the real-time service.
         } finally {
             busy.set(false)
         }
