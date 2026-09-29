@@ -278,7 +278,7 @@ class ScreenBrainService : Service() {
 
                 val predicted = enemyTracker.predictOnly(
                     now,
-                    config.predictionLeadMs
+                    effectiveLeadMs
                 )
 
                 var active = latestSnapshot
@@ -326,7 +326,7 @@ class ScreenBrainService : Service() {
                         val tracked = enemyTracker.update(
                             detected.filter { it.label == "enemy" },
                             t0,
-                            config.predictionLeadMs
+                            effectiveLeadMs
                         )
 
                         val entities = ArrayList<Detection>(detected.size)
