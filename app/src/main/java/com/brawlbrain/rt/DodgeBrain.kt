@@ -24,10 +24,28 @@ class DodgeBrain {
         player: Detection?,
         enemies: List<Detection>,
         now: Long,
-        cfg: BrainConfig
+        cfg: BrainConfig,
+        projectile: ProjectileThreat? = null
     ): DodgeCommand {
-        if (!cfg.autoDodge || player == null || enemies.isEmpty()) {
+        if (!cfg.autoDodge || player == null) {
+            resetWhenOff(cfg.autoDodge)
             return DodgeCommand(false, 0f, 0f, "OFF")
+        }
+
+        if (projectile?.urgent == true && projectile.enemy != null &&
+            now - lastDodgeAt >= 55L
+        ) {
+            val emergency = emergencyDodge(
+                player,
+                projectile.enemy,
+                cfg.dodgeStrengthPercent,
+                now
+            )
+            if (emergency.shouldDodge) return emergency
+        }
+
+        if (enemies.isEmpty()) {
+            return DodgeCommand(false, 0f, 0f, "NO-TARGET")
         }
 
         val candidate = enemies
@@ -71,7 +89,10 @@ class DodgeBrain {
             candidate.confidence * 0.30f
         ).coerceIn(0f, 1f)
 
-        val should = danger >= 0.36f
+        val projectileAssist = projectile?.score ?: 0f
+        val combinedDanger = max(danger, projectileAssist * 0.82f)
+
+        val should = combinedDanger >= 0.36f
         if (!should) return DodgeCommand(false, 0f, 0f, "WAIT")
 
         val lateral = vx * nx + vy * ny
@@ -81,16 +102,69 @@ class DodgeBrain {
             side = -side
         }
 
-        val strength = cfg.dodgeStrengthPercent.coerceIn(35, 100) / 100f
+        val strength = (
+            cfg.dodgeStrengthPercent.coerceIn(35, 100) / 100f
+        ) * (1f + combinedDanger * 0.26f)
+        val s = strength.coerceIn(0.35f, 1f)
         val forwardBreak = if (closing > 0.1f) 0.18f else 0.08f
 
-        val commandX = (nx * side * strength + dx / lineLen * forwardBreak).coerceIn(-1f, 1f)
-        val commandY = (ny * side * strength + dy / lineLen * forwardBreak).coerceIn(-1f, 1f)
+        var commandX = nx * side * s + dx / lineLen * forwardBreak
+        var commandY = ny * side * s + dy / lineLen * forwardBreak
+
+        val commandLen = hypot(commandX, commandY)
+        if (commandLen > 1f) {
+            commandX /= commandLen
+            commandY /= commandLen
+        }
 
         lastDodgeAt = now
 
         val angle = Math.toDegrees(atan2(commandY.toDouble(), commandX.toDouble())).toInt()
-        return DodgeCommand(true, commandX, commandY, "DODGE $angle°")
+        return DodgeCommand(
+            true,
+            commandX.coerceIn(-1f, 1f),
+            commandY.coerceIn(-1f, 1f),
+            "DODGE $angle° • danger ${(combinedDanger * 100f).toInt()}%"
+        )
+    }
+
+    private fun emergencyDodge(
+        player: Detection,
+        enemy: Detection,
+        strengthPercent: Int,
+        now: Long
+    ): DodgeCommand {
+        val dx = player.cx - enemy.cx
+        val dy = player.cy - enemy.cy
+        val len = max(0.001f, hypot(dx, dy))
+
+        val perpX = -dy / len
+        val perpY = dx / len
+
+        side = -side
+
+        val strength = (
+            strengthPercent.coerceIn(45, 100) / 100f
+        ).coerceIn(0.45f, 1f)
+
+        var x = perpX * side * strength + dx / len * 0.12f
+        var y = perpY * side * strength + dy / len * 0.12f
+
+        val m = hypot(x, y)
+        if (m > 1f) {
+            x /= m
+            y /= m
+        }
+
+        lastDodgeAt = now
+
+        val angle = Math.toDegrees(atan2(y.toDouble(), x.toDouble())).toInt()
+        return DodgeCommand(
+            true,
+            x.coerceIn(-1f, 1f),
+            y.coerceIn(-1f, 1f),
+            "PROJECTILE EVADE $angle°"
+        )
     }
 
     private fun distance(a: Detection, b: Detection): Float =
