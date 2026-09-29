@@ -141,6 +141,7 @@ class MainActivity : Activity() {
         } else {
             "Нужно разрешение «поверх других приложений»"
         }
+    }
 
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 }
