@@ -6,7 +6,49 @@ data class Detection(
     val cx: Float,
     val cy: Float,
     val width: Float,
-    val height: Float
+    val height: Float,
+    val id: Int = 0
+)
+
+data class HudState(
+    val hp: Float = 1f,
+    val hpConfidence: Float = 0f,
+    val ammo: Int = -1,
+    val maxAmmo: Int = 3,
+    val superCharge: Float = 0f,
+    val superReady: Boolean = false,
+    val ammoConfidence: Float = 0f,
+    val superConfidence: Float = 0f
+)
+
+data class CriticalWarning(
+    val type: WarningType = WarningType.NONE,
+    val dir1X: Float = 0f,
+    val dir1Y: Float = 0f,
+    val dir2X: Float = 0f,
+    val dir2Y: Float = 0f,
+    val active: Boolean = false
+)
+
+enum class WarningType {
+    NONE,
+    LOW_HP,
+    SURROUNDED,
+    GAS
+}
+
+data class EnemyTrackVisual(
+    val id: Int,
+    val x: Float,
+    val y: Float,
+    val predictedX: Float,
+    val predictedY: Float,
+    val vx: Float,
+    val vy: Float,
+    val confidence: Float,
+    val visible: Boolean,
+    val ageMs: Long,
+    val ageText: String
 )
 
 data class BrainFrame(
@@ -41,7 +83,15 @@ data class BrainFrame(
     val intelFocusScore: Float = 0f,
     val fireWindow: Float = 0f,
     val actionX: Float = 0f,
-    val actionY: Float = 0f
+    val actionY: Float = 0f,
+    val trackVisuals: List<EnemyTrackVisual> = emptyList(),
+    val trackCount: Int = 0,
+    val hud: HudState = HudState(),
+    val warning: CriticalWarning = CriticalWarning(),
+    val gasDetected: Boolean = false,
+    val safeZoneX: Float = 0f,
+    val safeZoneY: Float = 0f,
+    val debugText: String = ""
 )
 
 enum class Recommendation(val title: String) {
