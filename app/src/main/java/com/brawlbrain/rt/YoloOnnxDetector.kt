@@ -23,9 +23,14 @@ class YoloOnnxDetector(
     private val env = OrtEnvironment.getEnvironment()
     private data class SessionBundle(val session: OrtSession, val backend: String)
 
-    private val bundle = createSession()
-    private val session = bundle.session
-    val backend: String = bundle.backend
+    private val initialBundle = createSession(preferNnapi = true)
+    private var session = initialBundle.session
+    @Volatile var backend: String = initialBundle.backend
+        private set
+    @Volatile var lastError: String = ""
+        private set
+    @Volatile var lastDetectionCount: Int = 0
+        private set
 
     private val inputName: String
     private val inputSize: Int
@@ -37,19 +42,23 @@ class YoloOnnxDetector(
         inputSize = (shape.lastOrNull { it > 0 }?.toInt() ?: 640).coerceIn(320, 640)
     }
 
-    private fun createSession(): SessionBundle {
-        try {
-            val options = OrtSession.SessionOptions()
-            options.setIntraOpNumThreads(2)
-            options.setInterOpNumThreads(1)
-            options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-            options.addNnapi()
-            return SessionBundle(
-                env.createSession(modelBytes, options),
-                "NNAPI"
-            )
-        } catch (_: Throwable) {
+    private fun createSession(preferNnapi: Boolean): SessionBundle {
+        if (preferNnapi) {
             try {
+                val options = OrtSession.SessionOptions()
+                options.setIntraOpNumThreads(2)
+                options.setInterOpNumThreads(1)
+                options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                options.addNnapi()
+                return SessionBundle(
+                    env.createSession(modelBytes, options),
+                    "NNAPI"
+                )
+            } catch (_: Throwable) {
+            }
+        }
+
+        try {
                 val options = OrtSession.SessionOptions()
                 options.setIntraOpNumThreads(2)
                 options.setInterOpNumThreads(1)
@@ -72,6 +81,7 @@ class YoloOnnxDetector(
         }
     }
 
+    @Synchronized
     fun detect(source: Bitmap): List<Detection> {
         val prepared = letterbox(source)
         val data = toTensorData(prepared.bitmap)
@@ -88,7 +98,7 @@ class YoloOnnxDetector(
                     val info = output.info as? TensorInfo ?: return emptyList()
                     val buffer = output.floatBuffer ?: return emptyList()
 
-                    YoloParser.parse(
+                    val detections = YoloParser.parse(
                         buffer,
                         info.shape,
                         labels,
@@ -98,9 +108,36 @@ class YoloOnnxDetector(
                         confidenceThreshold,
                         iouThreshold
                     )
+                    lastError = ""
+                    lastDetectionCount = detections.size
+                    detections
                 }
             }
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            lastError = backend + ": " + t.javaClass.simpleName + ": " +
+                (t.message ?: "inference failed")
+            lastDetectionCount = 0
+
+            if (backend != "CPU") {
+                try {
+                    session.close()
+                } catch (_: Throwable) {
+                }
+
+                return try {
+                    val fallback = createSession(preferNnapi = false)
+                    session = fallback.session
+                    backend = fallback.backend
+                    lastError = "fallback -> " + backend
+                    detect(source)
+                } catch (fallbackError: Throwable) {
+                    lastError = "fallback failed: " +
+                        fallbackError.javaClass.simpleName + ": " +
+                        (fallbackError.message ?: "unknown")
+                    emptyList()
+                }
+            }
+
             emptyList()
         }
     }
@@ -153,7 +190,10 @@ class YoloOnnxDetector(
     }
 
     override fun close() {
-        session.close()
+        try {
+            session.close()
+        } catch (_: Throwable) {
+        }
     }
 
     data class LetterboxResult(
