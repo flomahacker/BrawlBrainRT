@@ -329,7 +329,9 @@ class ScreenBrainService : Service() {
                             intelFocusX = intel.focusX,
                             intelFocusY = intel.focusY,
                             intelFocusScore = intel.focusScore,
-                            fireWindow = intel.fireWindow
+                            fireWindow = intel.fireWindow,
+                            actionX = intel.actionX,
+                            actionY = intel.actionY
                         )
 
                         latestSnapshot = snapshot
