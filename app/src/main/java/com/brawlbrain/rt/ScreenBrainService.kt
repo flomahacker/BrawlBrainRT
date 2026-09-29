@@ -410,7 +410,7 @@ class ScreenBrainService : Service() {
                 }
 
                 if (active != null) {
-                    val visibleTracks = predicted.visible
+                    val visibleTracks = active.enemies
 
                     val warning = alertEngine.update(
                         active.player,
