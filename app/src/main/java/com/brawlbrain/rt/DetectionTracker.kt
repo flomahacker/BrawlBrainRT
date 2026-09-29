@@ -172,8 +172,8 @@ class DetectionTracker {
             val d = candidates[di]
             tracks += Track(
                 id = allocateId(),
-                x = visualX,
-                y = visualY,
+                x = d.cx,
+                y = d.cy,
                 width = d.width,
                 height = d.height,
                 confidence = d.confidence,
