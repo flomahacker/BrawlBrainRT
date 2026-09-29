@@ -1,0 +1,2 @@
+BrawlBrain RT 0.2.0
+YOLOv11 on-device assistant profile for Xiaomi 12X.
