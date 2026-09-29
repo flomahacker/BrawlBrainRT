@@ -5,18 +5,31 @@ import android.graphics.*
 import android.view.View
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.sin
-import java.util.Locale
 
 class OverlayView(context: Context) : View(context) {
 
     private var config = BrainPrefs.load(context)
+    private var frame = emptyFrame()
 
-    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val glyphPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+    }
+
+    private val debugPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
-    private val smallPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private var frame = emptyFrame()
+
+    private enum class Signal {
+        ATTACK,
+        DODGE,
+        RETREAT,
+        CONTROL,
+        WAIT,
+        FREE
+    }
 
     fun updateConfig(newConfig: BrainConfig) {
         config = newConfig
@@ -30,307 +43,390 @@ class OverlayView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        if (width <= 0 || height <= 0) return
 
-        val w = width.toFloat()
-        val h = height.toFloat()
-        val scale = config.hudScalePercent / 100f
+        val ui = resources.displayMetrics.density *
+            (config.hudScalePercent.coerceIn(70, 120) / 100f)
 
-        canvas.save()
-        canvas.scale(scale, scale)
+        drawSignalCard(canvas, ui)
 
-        val panelW = 560f
-        val panelH = when {
-            frame.projectileDetected -> 232f
-            config.showDebug || config.autoDodge -> 202f
-            else -> 170f
-        }
-        drawPanel(canvas, 22f, 22f, panelW, panelH)
-        drawHeader(canvas)
-
-        if (config.showThreat) drawThreatRing(canvas, w / scale)
-        if (config.showEnemies) frame.enemies.forEach { drawEnemy(canvas, it) }
-        if (config.showTeammates) frame.teammates.forEach { drawTeammate(canvas, it) }
-        if (config.showWalls) frame.walls.forEach { if (it.label != "bush") drawWall(canvas, it) }
-
-        frame.player?.let { drawPlayer(canvas, it) }
-
-        if (config.showTargetLine) {
-            frame.target?.let { drawTargetGuide(canvas, it) }
-        }
-
+        val signal = signal()
         if (config.showAdvice) {
-            drawIntelFocus(canvas)
-            drawActionArrow(canvas)
-        }
+            drawFocus(canvas, signal)
+            drawActionArrow(canvas, signal, ui)
 
-        canvas.restore()
-    }
+            if (signal == Signal.DODGE || frame.projectileDetected) {
+                drawIncomingThreat(canvas, ui)
+            }
 
-    private fun drawPanel(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float) {
-        val alpha = (config.hudOpacityPercent.coerceIn(40, 100) * 2.15f)
-            .toInt()
-            .coerceIn(120, 235)
-
-        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = (alpha shl 24) or 0x000B0F17
-        }
-        canvas.drawRoundRect(left, top, right, bottom, 28f, 28f, bg)
-
-        val accent = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = accentColor()
-        }
-        canvas.drawRoundRect(left, top, left + 10f, bottom, 6f, 6f, accent)
-    }
-
-    private fun drawHeader(canvas: Canvas) {
-        textPaint.textSize = 28f
-        textPaint.color = Color.WHITE
-        canvas.drawText(
-            if (config.showAdvice) frame.intelActionTitle else "BRAWLBRAIN",
-            54f,
-            68f,
-            textPaint
-        )
-
-        smallPaint.textSize = 17f
-        smallPaint.color = 0xFFE1E6F0.toInt()
-
-        val detail = if (config.showAdvice) {
-            frame.intelActionDetail
+            if (signal == Signal.CONTROL) {
+                drawControlRoute(canvas, ui)
+            }
         } else {
-            "VISION ONLINE • ${frame.role} • ${frame.gameMode}"
-        }
-        canvas.drawText(detail, 54f, 98f, smallPaint)
-
-        smallPaint.textSize = 16f
-        smallPaint.color = 0xFFACB5C7.toInt()
-
-        if (config.showThreat) {
-            canvas.drawText(
-                "Угроза ${percent(frame.threat)}%   Окно ${percent(frame.opportunity)}%   Фокус ${percent(frame.intelFocusScore)}%",
-                54f,
-                128f,
-                smallPaint
-            )
-        } else {
-            canvas.drawText(
-                "Целей ${frame.enemyCount}   Укрытие ${percent(frame.cover)}%   Изоляция ${percent(frame.isolation)}%",
-                54f,
-                128f,
-                smallPaint
-            )
+            if (config.showEnemies) {
+                frame.enemies.forEach { drawEnemy(canvas, it) }
+            }
+            if (config.showTeammates) {
+                frame.teammates.forEach { drawTeammate(canvas, it) }
+            }
         }
 
         if (config.showDebug) {
-            canvas.drawText(
-                "Vision " + String.format(Locale.US, "%.1f", frame.fps) +
-                    " FPS • " + frame.inferenceMs + "ms • " + frame.engine,
-                54f,
-                158f,
-                smallPaint
+            drawDebug(canvas, ui)
+        }
+    }
+
+    private fun drawSignalCard(canvas: Canvas, ui: Float) {
+        val left = 16f * ui
+        val top = 16f * ui
+        val right = left + 74f * ui
+        val bottom = top + 66f * ui
+        val signal = signal()
+        val color = signalColor(signal)
+
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = withAlpha(0x10151E, 218)
+        }
+        canvas.drawRoundRect(left, top, right, bottom, 18f * ui, 18f * ui, bg)
+
+        val strip = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = color
+        }
+        canvas.drawRoundRect(
+            left,
+            top,
+            left + 6f * ui,
+            bottom,
+            5f * ui,
+            5f * ui,
+            strip
+        )
+
+        glyphPaint.textSize = 34f * ui
+        glyphPaint.color = Color.WHITE
+        canvas.drawText(signalGlyph(signal), left + 40f * ui, top + 44f * ui, glyphPaint)
+
+        val score = frame.intelFocusScore.coerceIn(0f, 1f)
+        val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 3f * ui
+            strokeCap = Paint.Cap.ROUND
+            color = withAlpha(color, 90)
+        }
+        val rr = RectF(
+            right - 18f * ui,
+            top + 10f * ui,
+            right - 8f * ui,
+            top + 20f * ui
+        )
+        canvas.drawArc(rr, -90f, 360f, false, ring)
+
+        ring.color = color
+        canvas.drawArc(rr, -90f, 360f * score, false, ring)
+
+        if (frame.projectileDetected) {
+            val bolt = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = if (frame.projectileThreat >= 0.58f) {
+                    0xFFFF5368.toInt()
+                } else {
+                    0xFFFFC857.toInt()
+                }
+            }
+            canvas.drawCircle(
+                left + 62f * ui,
+                bottom - 12f * ui,
+                5f * ui,
+                bolt
             )
         }
-
-        if (config.autoDodge) {
-            val dodgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0xFF8FD3FF.toInt()
-                textSize = 14f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            }
-            canvas.drawText("DODGE ONLY • ON", 54f, 184f, dodgePaint)
-        }
     }
 
-    private fun drawThreatRing(canvas: Canvas, screenW: Float) {
-        val back = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 9f
-            strokeCap = Paint.Cap.ROUND
-            color = 0x55343B4D
-        }
-        val front = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 9f
-            strokeCap = Paint.Cap.ROUND
-            color = accentColor()
+    private fun drawFocus(canvas: Canvas, signal: Signal) {
+        val score = frame.intelFocusScore
+        if (score < 0.25f) return
+
+        val x = frame.intelFocusX.coerceIn(0f, 1f) * width
+        val y = frame.intelFocusY.coerceIn(0f, 1f) * height
+        val radius = when (signal) {
+            Signal.ATTACK -> 31f
+            Signal.DODGE -> 28f
+            Signal.RETREAT -> 24f
+            Signal.CONTROL -> 27f
+            Signal.WAIT -> 29f
+            Signal.FREE -> 23f
         }
 
-        val rr = RectF(screenW - 132f, 47f, screenW - 60f, 119f)
-        canvas.drawArc(rr, -90f, 360f, false, back)
-        canvas.drawArc(rr, -90f, 360f * frame.threat, false, front)
-    }
-
-    private fun drawPlayer(canvas: Canvas, d: Detection) {
+        val color = signalColor(signal)
         val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeWidth = 5f
-            color = 0xFF7CA7FF.toInt()
+            strokeCap = Paint.Cap.ROUND
+            color = color
         }
-        canvas.drawCircle(d.cx * width, d.cy * height, 24f, p)
+
+        val arm = 14f
+        drawBracket(canvas, x - radius, y - radius, -1f, -1f, arm, p)
+        drawBracket(canvas, x + radius, y - radius, 1f, -1f, arm, p)
+        drawBracket(canvas, x - radius, y + radius, -1f, 1f, arm, p)
+        drawBracket(canvas, x + radius, y + radius, 1f, 1f, arm, p)
+
+        if (signal == Signal.ATTACK) {
+            val inner = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 2.5f
+                color = withAlpha(color, 150)
+            }
+            canvas.drawCircle(x, y, radius - 12f, inner)
+        }
+    }
+
+    private fun drawBracket(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        sx: Float,
+        sy: Float,
+        arm: Float,
+        paint: Paint
+    ) {
+        canvas.drawLine(x, y, x + sx * arm, y, paint)
+        canvas.drawLine(x, y, x, y + sy * arm, paint)
+    }
+
+    private fun drawActionArrow(canvas: Canvas, signal: Signal, ui: Float) {
+        val player = frame.player ?: return
+
+        val ax = frame.actionX
+        val ay = frame.actionY
+        val len = hypot(ax.toDouble(), ay.toDouble()).toFloat()
+        if (len < 0.18f) return
+
+        val px = player.cx.coerceIn(0f, 1f) * width
+        val py = player.cy.coerceIn(0f, 1f) * height
+
+        val arrowLength = when (signal) {
+            Signal.DODGE, Signal.RETREAT -> 108f * ui
+            Signal.ATTACK -> 124f * ui
+            Signal.CONTROL -> 104f * ui
+            Signal.WAIT -> 82f * ui
+            Signal.FREE -> 70f * ui
+        }
+
+        val ex = px + ax / len * arrowLength
+        val ey = py + ay / len * arrowLength
+        val angle = atan2(ey - py, ex - px)
+
+        val color = signalColor(signal)
+        val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 15f * ui
+            strokeCap = Paint.Cap.ROUND
+            color = withAlpha(color, 42)
+        }
+        canvas.drawLine(px, py, ex, ey, shadow)
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 7f * ui
+            strokeCap = Paint.Cap.ROUND
+            color = color
+        }
+        canvas.drawLine(px, py, ex, ey, paint)
+
+        val head = 19f * ui
+        val path = Path().apply {
+            moveTo(ex, ey)
+            lineTo(
+                ex - cos(angle - 0.58f) * head,
+                ey - sin(angle - 0.58f) * head
+            )
+            lineTo(
+                ex - cos(angle + 0.58f) * head,
+                ey - sin(angle + 0.58f) * head
+            )
+            close()
+        }
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = color
+        }
+        canvas.drawPath(path, fill)
+
+        val playerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 4f * ui
+            color = Color.WHITE
+        }
+        canvas.drawCircle(px, py, 18f * ui, playerPaint)
+    }
+
+    private fun drawIncomingThreat(canvas: Canvas, ui: Float) {
+        val player = frame.player ?: return
+        val enemy = frame.target ?: return
+
+        val px = player.cx * width
+        val py = player.cy * height
+        val ex = enemy.cx * width
+        val ey = enemy.cy * height
+
+        val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 5f * ui
+            strokeCap = Paint.Cap.ROUND
+            color = 0xFFFF5368.toInt()
+            pathEffect = DashPathEffect(
+                floatArrayOf(12f * ui, 9f * ui),
+                0f
+            )
+        }
+        canvas.drawLine(ex, ey, px, py, line)
+
+        val dx = px - ex
+        val dy = py - ey
+        val len = maxOf(1f, hypot(dx.toDouble(), dy.toDouble()).toFloat())
+        val ux = dx / len
+        val uy = dy / len
+
+        val marker = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = 0xFFFF5368.toInt()
+        }
+
+        val threatLevel = frame.projectileThreat.coerceIn(0.2f, 1f)
+        val count = 2 + (threatLevel * 3f).toInt()
+
+        for (i in 1..count) {
+            val t = i / (count + 1f)
+            val mx = ex + dx * t
+            val my = ey + dy * t
+            val rr = (4f + threatLevel * 2f) * ui
+            canvas.drawCircle(
+                mx - ux * i * 1.5f * ui,
+                my - uy * i * 1.5f * ui,
+                rr,
+                marker
+            )
+        }
+
+        val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 6f * ui
+            color = 0xFFFF5368.toInt()
+        }
+        canvas.drawCircle(px, py, 34f * ui, ring)
+    }
+
+    private fun drawControlRoute(canvas: Canvas, ui: Float) {
+        val player = frame.player ?: return
+        val ax = frame.actionX
+        val ay = frame.actionY
+        val len = hypot(ax.toDouble(), ay.toDouble()).toFloat()
+        if (len < 0.18f) return
+
+        val px = player.cx * width
+        val py = player.cy * height
+        val color = signalColor(Signal.CONTROL)
+
+        val diamond = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = withAlpha(color, 220)
+        }
+
+        for (i in 1..3) {
+            val t = i / 3.6f
+            val x = px + ax / len * (48f + 52f * t) * ui
+            val y = py + ay / len * (48f + 52f * t) * ui
+            val size = 8f * ui
+            val path = Path().apply {
+                moveTo(x, y - size)
+                lineTo(x + size, y)
+                lineTo(x, y + size)
+                lineTo(x - size, y)
+                close()
+            }
+            canvas.drawPath(path, diamond)
+        }
+    }
+
+    private fun drawDebug(canvas: Canvas, ui: Float) {
+        val text = "\${frame.fps.toInt()} FPS  \${frame.inferenceMs}ms"
+        debugPaint.textSize = 12f * ui
+        debugPaint.color = 0xD8FFFFFF.toInt()
+
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = 0xCC10151E.toInt()
+        }
+
+        val left = 16f * ui
+        val top = 90f * ui
+        val right = left + debugPaint.measureText(text) + 18f * ui
+        val bottom = top + 24f * ui
+
+        canvas.drawRoundRect(left, top, right, bottom, 8f * ui, 8f * ui, bg)
+        canvas.drawText(text, left + 9f * ui, top + 17f * ui, debugPaint)
     }
 
     private fun drawEnemy(canvas: Canvas, d: Detection) {
         val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
-            color = if (d.confidence >= 0.60f) 0xFFFF596B.toInt()
-            else 0xFFFFAD67.toInt()
+            color = 0x88FF596B.toInt()
         }
-
         canvas.drawCircle(
             d.cx * width,
             d.cy * height,
-            15f + d.confidence * 9f,
+            12f + d.confidence * 8f,
             p
         )
-
-        val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 3f
-            color = 0xAAFFFFFF.toInt()
-        }
-        canvas.drawCircle(d.cx * width, d.cy * height, 26f, ring)
     }
 
     private fun drawTeammate(canvas: Canvas, d: Detection) {
         val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeWidth = 4f
-            color = 0xFF62D6A2.toInt()
+            color = 0xAA62D6A2.toInt()
         }
-        canvas.drawCircle(d.cx * width, d.cy * height, 20f, p)
+        canvas.drawCircle(d.cx * width, d.cy * height, 18f, p)
     }
 
-    private fun drawWall(canvas: Canvas, d: Detection) {
-        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 4f
-            color = if (d.label == "close_bush") 0x8879D69C.toInt()
-            else 0x88CBD4E5.toInt()
-        }
-
-        val left = (d.cx - d.width / 2f) * width
-        val top = (d.cy - d.height / 2f) * height
-        val right = (d.cx + d.width / 2f) * width
-        val bottom = (d.cy + d.height / 2f) * height
-
-        canvas.drawRoundRect(RectF(left, top, right, bottom), 12f, 12f, p)
-    }
-
-    private fun drawIntelFocus(canvas: Canvas) {
-        if (frame.intelFocusScore < 0.30f || width <= 0 || height <= 0) return
-
-        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 3.5f
-            color = if (frame.fireWindow >= 0.70f) 0xFF7DFF9A.toInt() else 0xFFFFD166.toInt()
-        }
-        val x = frame.intelFocusX * width
-        val y = frame.intelFocusY * height
-        canvas.drawCircle(x, y, 34f, p)
-        canvas.drawCircle(x, y, 40f, p.apply { alpha = 90 })
-    }
-
-    private fun drawActionArrow(canvas: Canvas) {
-        val player = frame.player ?: return
-        val ax = frame.actionX
-        val ay = frame.actionY
-        val len = kotlin.math.hypot(ax.toDouble(), ay.toDouble()).toFloat()
-        if (len < 0.25f) return
-
-        val px = player.cx * width
-        val py = player.cy * height
-        val scalePx = 72f
-        val ex = px + (ax / len) * scalePx
-        val ey = py + (ay / len) * scalePx
-        val angle = atan2(ey - py, ex - px)
-        val size = 18f
-
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 5f
-            strokeCap = Paint.Cap.ROUND
-            color = accentColor()
-        }
-        canvas.drawLine(px, py, ex, ey, paint)
-
-        val head = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = accentColor()
-        }
-        val path = Path().apply {
-            moveTo(ex, ey)
-            lineTo(ex - cos(angle - 0.55f) * size, ey - sin(angle - 0.55f) * size)
-            lineTo(ex - cos(angle + 0.55f) * size, ey - sin(angle + 0.55f) * size)
-            close()
-        }
-        canvas.drawPath(path, head)
-    }
-
-    private fun drawTargetGuide(canvas: Canvas, target: Detection) {
-        val player = frame.player ?: return
-
-        val x1 = player.cx * width
-        val y1 = player.cy * height
-        val x2 = frame.targetLeadX * width
-        val y2 = frame.targetLeadY * height
-
-        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 5f
-            color = accentColor()
-            pathEffect = if (config.reducedMotion) {
-                DashPathEffect(floatArrayOf(14f, 10f), 0f)
-            } else {
-                null
-            }
-        }
-
-        canvas.drawLine(x1, y1, x2, y2, p)
-
-        val angle = atan2(y2 - y1, x2 - x1)
-        val size = 28f
-        val leftX = x2 - cos(angle - 0.55f) * size
-        val leftY = y2 - sin(angle - 0.55f) * size
-        val rightX = x2 - cos(angle + 0.55f) * size
-        val rightY = y2 - sin(angle + 0.55f) * size
-
-        val arrow = Path().apply {
-            moveTo(x2, y2)
-            lineTo(leftX, leftY)
-            lineTo(rightX, rightY)
-            close()
-        }
-
-        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = accentColor()
-        }
-        canvas.drawPath(arrow, fill)
-
-        if (target.confidence > 0.5f) {
-            val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                strokeWidth = 4f
-                color = accentColor()
-            }
-            canvas.drawCircle(target.cx * width, target.cy * height, 34f, ring)
+    private fun signal(): Signal {
+        return when (frame.intelActionTitle) {
+            "ОКНО BUZZ", "ОКНО ВЫСТРЕЛА" -> Signal.ATTACK
+            "СНАРЯД" -> Signal.DODGE
+            "RESET" -> Signal.RETREAT
+            "ЗАКРОЙ ПУТЬ", "ЗОНИРУЙ", "ДАЛЬНЯЯ ЗОНА" -> Signal.CONTROL
+            "НЕ ВХОДИ", "НЕ ЛОВИ ЛОБ", "ЖДИ УГОЛ" -> Signal.WAIT
+            else -> Signal.FREE
         }
     }
 
-    private fun accentColor(): Int {
-        return when (frame.recommendation) {
-            Recommendation.RETREAT -> 0xFFFF5F78.toInt()
-            Recommendation.PRESSURE -> 0xFF7DFF9A.toInt()
-            Recommendation.HOLD -> 0xFFFFD166.toInt()
-            Recommendation.TRACK -> 0xFF77B7FF.toInt()
-            Recommendation.RESET -> 0xFFB8C0D3.toInt()
+    private fun signalGlyph(signal: Signal): String {
+        return when (signal) {
+            Signal.ATTACK -> "➜"
+            Signal.DODGE -> "↝"
+            Signal.RETREAT -> "↙"
+            Signal.CONTROL -> "◇"
+            Signal.WAIT -> "○"
+            Signal.FREE -> "✓"
         }
     }
 
-    private fun percent(value: Float): Int =
-        (value.coerceIn(0f, 1f) * 100f).toInt()
+    private fun signalColor(signal: Signal): Int {
+        return when (signal) {
+            Signal.ATTACK -> 0xFF67F58A.toInt()
+            Signal.DODGE -> 0xFFFF5368.toInt()
+            Signal.RETREAT -> 0xFFFF5368.toInt()
+            Signal.CONTROL -> 0xFF6DB7FF.toInt()
+            Signal.WAIT -> 0xFFFFD166.toInt()
+            Signal.FREE -> 0xFF8BE0FF.toInt()
+        }
+    }
+
+    private fun withAlpha(color: Int, alpha: Int): Int =
+        (alpha.coerceIn(0, 255) shl 24) or (color and 0x00FFFFFF)
 
     private fun emptyFrame() = BrainFrame(
         player = null,
