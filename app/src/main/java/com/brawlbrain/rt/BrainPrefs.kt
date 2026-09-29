@@ -43,6 +43,7 @@ data class BrainConfig(
 
     // Critical warnings / hysteresis.
     val showWarnings: Boolean = true,
+    val showSuperPulse: Boolean = true,
     val hpEnterThreshold: Float = 0.28f,
     val hpExitThreshold: Float = 0.36f,
     val nearbyEnemyEnterDistance: Float = 0.34f,
@@ -104,6 +105,7 @@ object BrainPrefs {
     private const val ATTACK_RANGE_RAW = "attack_range_raw"
     private const val ENEMY_DEFAULT_RANGE_RAW = "enemy_default_range_raw"
     private const val SHOW_WARNINGS = "show_warnings"
+    private const val SHOW_SUPER_PULSE = "show_super_pulse"
     private const val HP_ENTER = "hp_enter"
     private const val HP_EXIT = "hp_exit"
     private const val NEAR_ENTER = "near_enter"
@@ -166,6 +168,7 @@ object BrainPrefs {
             attackRangeRaw = p.getFloat(ATTACK_RANGE_RAW, defaultAttackRange("Buzz")),
             enemyDefaultRangeRaw = p.getFloat(ENEMY_DEFAULT_RANGE_RAW, 8f),
             showWarnings = p.getBoolean(SHOW_WARNINGS, true),
+            showSuperPulse = p.getBoolean(SHOW_SUPER_PULSE, true),
             hpEnterThreshold = p.getFloat(HP_ENTER, 0.28f).coerceIn(0.05f, 0.60f),
             hpExitThreshold = p.getFloat(HP_EXIT, 0.36f).coerceIn(0.10f, 0.80f),
             nearbyEnemyEnterDistance = p.getFloat(NEAR_ENTER, 0.34f).coerceIn(0.10f, 0.80f),
@@ -211,6 +214,7 @@ object BrainPrefs {
             .putFloat(ATTACK_RANGE_RAW, config.attackRangeRaw)
             .putFloat(ENEMY_DEFAULT_RANGE_RAW, config.enemyDefaultRangeRaw)
             .putBoolean(SHOW_WARNINGS, config.showWarnings)
+            .putBoolean(SHOW_SUPER_PULSE, config.showSuperPulse)
             .putFloat(HP_ENTER, config.hpEnterThreshold)
             .putFloat(HP_EXIT, config.hpExitThreshold)
             .putFloat(NEAR_ENTER, config.nearbyEnemyEnterDistance)
