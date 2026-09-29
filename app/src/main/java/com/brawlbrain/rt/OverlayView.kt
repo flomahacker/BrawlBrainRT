@@ -116,8 +116,6 @@ class OverlayView(context: Context) : View(context) {
 
         if (config.showDebug) {
             canvas.drawText(
-        if (config.showDebug) {
-            canvas.drawText(
                 "Vision " + String.format(Locale.US, "%.1f", frame.fps) +
                     " FPS • " + frame.inferenceMs + "ms • " + frame.engine,
                 54f,
@@ -133,7 +131,6 @@ class OverlayView(context: Context) : View(context) {
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
             canvas.drawText("DODGE ONLY • ON", 54f, 184f, dodgePaint)
-        }
         }
     }
 
