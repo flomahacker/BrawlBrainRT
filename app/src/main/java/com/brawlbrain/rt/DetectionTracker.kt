@@ -4,12 +4,22 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
-class DetectionTracker(
-    private val ghostTtlMs: Long = 5000L,
-    private val maxTracks: Int = 10,
-    private val maxMatchDistance: Float = 0.14f,
-    private val minIou: Float = 0.04f
-) {
+class DetectionTracker {
+    private var ghostTtlMs = 5000L
+    private var maxTracks = 10
+    private var maxMatchDistance = 0.14f
+    private var minIou = 0.04f
+    private var visibleGraceMs = 150L
+
+    fun configure(config: BrainConfig) {
+        ghostTtlMs = config.ghostTtlMs.coerceIn(1000L, 7000L)
+        maxTracks = config.trackerMaxTracks.coerceIn(3, 10)
+        maxMatchDistance = config.trackerMatchDistance.coerceIn(0.05f, 0.25f)
+        minIou = config.trackerMinIou.coerceIn(0f, 0.30f)
+        visibleGraceMs = config.trackerVisibleGraceMs.coerceIn(80L, 300L)
+        while (tracks.size > maxTracks) tracks.removeAt(0)
+    }
+
     private class Kalman1D(var position: Float, var velocity: Float = 0f) {
         private var p00 = 0.02f
         private var p01 = 0f
@@ -184,7 +194,7 @@ class DetectionTracker(
         for (track in tracks) {
             val d = track.box()
             val ageMs = (now - track.lastSeenAt).coerceAtLeast(0L)
-            val isVisible = track.visible && ageMs < 150L
+            val isVisible = track.visible && ageMs < visibleGraceMs
 
             if (isVisible) visible += d
 
@@ -204,11 +214,7 @@ class DetectionTracker(
                 visible = isVisible,
                 ageMs = ageMs,
                 ageText = "\${(ageMs / 1000L).coerceIn(0L, 5L)}s",
-                idText = when (track.id) {
-                    1 -> "#1"; 2 -> "#2"; 3 -> "#3"; 4 -> "#4"; 5 -> "#5"
-                    6 -> "#6"; 7 -> "#7"; 8 -> "#8"; 9 -> "#9"; 10 -> "#10"
-                    else -> "#"
-                }
+                idText = "#${track.id}"
             )
         }
 
