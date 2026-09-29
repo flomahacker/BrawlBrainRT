@@ -130,7 +130,7 @@ class MainActivity : Activity() {
         root.addView(features)
 
         root.addView(TextView(this).apply {
-            text = "Подсказки отображаются поверх игры. Автоматических нажатий по игре нет."
+            text = "Подсказки поверх игры. Dodge работает только как движение и включается вручную."
             textSize = 12f
             gravity = Gravity.CENTER
             setTextColor(0xFF697286.toInt())
