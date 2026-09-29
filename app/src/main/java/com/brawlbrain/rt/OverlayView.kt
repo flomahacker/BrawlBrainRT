@@ -162,7 +162,7 @@ class OverlayView(context: Context) : View(context) {
         text.color = withAlpha(WHITE, (220f * fade).toInt())
         canvas.drawText(track.ageText, x + 33f * scale, y - 25f * scale, text)
 
-        drawGhostId(canvas, track.id, x, y, scale)
+        drawGhostId(canvas, track.idText, x, y, scale)
 
         val offscreen = track.predictedX < 0f || track.predictedX > 1f ||
             track.predictedY < 0f || track.predictedY > 1f
@@ -176,7 +176,7 @@ class OverlayView(context: Context) : View(context) {
 
     private fun drawGhostId(
         canvas: Canvas,
-        id: Int,
+        idText: String,
         x: Float,
         y: Float,
         scale: Float
@@ -184,7 +184,7 @@ class OverlayView(context: Context) : View(context) {
         text.textSize = 9f * scale
         text.typeface = Typeface.DEFAULT
         text.color = withAlpha(WHITE, 150)
-        canvas.drawText(frame.trackVisuals.firstOrNull { it.id == id }?.idText ?: "#", x - 12f * scale, y + 39f * scale, text)
+        canvas.drawText(idText, x - 12f * scale, y + 39f * scale, text)
     }
 
     private fun drawPlayerRange(canvas: Canvas, scale: Float) {
