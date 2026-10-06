@@ -40,6 +40,9 @@ class DodgeService : Service() {
         @Volatile
         var latestSummary = "ожидание"
             private set
+
+        private const val CHANNEL_ID = "brawl_dodge_ai"
+        private const val NOTIFICATION_ID = 701
     }
 
     private lateinit var worker: HandlerThread
@@ -437,8 +440,5 @@ class DodgeService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    companion object {
-        private const val CHANNEL_ID = "brawl_dodge_ai"
-        private const val NOTIFICATION_ID = 701
-    }
+
 }
