@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Brawl Dodge AI M1</string>
+    <string name="accessibility_description">Real-time tactical controller for BrawlBrain.</string>
 </resources>

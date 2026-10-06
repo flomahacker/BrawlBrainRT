@@ -25,8 +25,8 @@ enum DetectionType {
 
 inline bool isRed(uint8_t r, uint8_t g, uint8_t b) {
     return r > 145 &&
-           r > static_cast<uint8_t>(g * 1.35f) &&
-           r > static_cast<uint8_t>(b * 1.35f) &&
+           static_cast<float>(r) > static_cast<float>(g) * 1.35f &&
+           static_cast<float>(r) > static_cast<float>(b) * 1.35f &&
            (static_cast<int>(r) - static_cast<int>(g)) > 32;
 }
 
