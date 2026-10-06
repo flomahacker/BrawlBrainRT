@@ -31,19 +31,25 @@ jobs:
         with:
           packages: "platforms;android-35 build-tools;35.0.0 platform-tools"
 
-      - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: "8.9"
+      - name: Install native toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
 
       - name: Download community YOLO models
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p app/src/main/assets/models
-          curl -fL --retry 3 --retry-delay 2             "https://raw.githubusercontent.com/AngelFireLA/BrawlStarsBotMaking/main/models/entity%20detection/.onnx/PylaEntityDetectorV2.onnx"             -o app/src/main/assets/models/PylaEntityDetectorV2.onnx
-          curl -fL --retry 3 --retry-delay 2             "https://raw.githubusercontent.com/AngelFireLA/BrawlStarsBotMaking/main/models/wall%20detection/.onnx/PylaWallDetectorV2.onnx"             -o app/src/main/assets/models/PylaWallDetectorV2.onnx
+          curl -fL --retry 3 --retry-delay 2 "https://raw.githubusercontent.com/AngelFireLA/BrawlStarsBotMaking/main/models/entity%20detection/.onnx/PylaEntityDetectorV2.onnx" -o app/src/main/assets/models/PylaEntityDetectorV2.onnx
+          curl -fL --retry 3 --retry-delay 2 "https://raw.githubusercontent.com/AngelFireLA/BrawlStarsBotMaking/main/models/wall%20detection/.onnx/PylaWallDetectorV2.onnx" -o app/src/main/assets/models/PylaWallDetectorV2.onnx
           ls -lh app/src/main/assets/models
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "8.9"
 
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon --stacktrace

@@ -1,32 +1,36 @@
-# BrawlBrain RT
+# Brawl Dodge AI
 
-Real-time on-device vision assistant for Brawl Stars on Android.
+Milestone 1 implements the real-time screen-capture foundation for the Xiaomi 12X target.
 
-The app captures the display with MediaProjection, runs community ONNX vision models locally, tracks the player and enemies, detects walls/cover, and renders a stable HUD with a tactical recommendation.
+## Scope of M1
 
-The project is intentionally a coach/assistant rather than an input injector: it observes the match and gives visual guidance without taking control of the game.
+- MediaProjection screen capture.
+- Newest-frame-only processing with an ImageReader queue depth of two.
+- Working resolution around 640x288, preserving the 20:9 landscape aspect ratio.
+- Native C++ color/shape detector through one JNI call per processed frame.
+- Stable full-screen debug overlay.
+- Thermal-safe processing rate based on Android thermal status.
+- No AccessibilityService and no touch injection in M1.
 
-Vision models used by the build:
+## M1 detector
 
-- PylaEntityDetectorV2 — YOLOv11, enemy / teammate / player
-- PylaWallDetectorV2 — YOLOv11, wall / bush / close_bush
+The native detector is intentionally lightweight. It produces candidates for:
 
-The model list and model files are documented in AngelFireLA/BrawlStarsBotMaking. The workflow downloads the current upstream files during CI instead of checking the weights into this repository.
+- player marker (cyan/green saturated blob)
+- enemy / enemy health-bar candidate (red)
+- projectile candidate (small red blob)
+- area indicator candidate (orange compact blob)
 
-Xiaomi 12X target profile:
+This is a bootstrap detector, not a brawler-specific universal classifier. It must be calibrated and benchmarked against real Training Cave recordings before later milestones depend on it.
 
-- ARM64 only
-- Snapdragon 870 / Adreno 650
-- screen capture kept at a reduced working resolution
-- entity detection about every 125 ms
-- wall detection about every 600 ms
-- NNAPI is attempted first, with CPU fallback
+## Build
 
-Build:
+GitHub Actions installs Android SDK, NDK and CMake, then builds the debug APK.
 
-1. Open GitHub Actions.
-2. Run Build BrawlBrainRT APK.
-3. Download the BrawlBrainRT-debug-apk artifact.
-4. Install the APK on the phone.
+Local build requires JDK 17, Android SDK 35, NDK 27.2.12479018, CMake 3.22.1 and Gradle 8.9.
 
-This is an experimental vision assistant. It does not guarantee trophy gains or match outcomes.
+## Testing
+
+Use the Training Cave or Friendly Battle only. After granting overlay and screen-capture permissions, start M1 and verify that the debug boxes follow the player and visible red/orange threats.
+
+M1 is observation-only. Touch injection is deliberately absent.
