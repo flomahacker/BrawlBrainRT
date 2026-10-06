@@ -1,2 +1,4 @@
-Brawl Dodge AI 0.3.0-m1
-Milestone 1: MediaProjection + native CV debug overlay, touch injection OFF.
+Brawl Dodge AI 1.0.0
+Clean single-app release for Xiaomi 12X.
+Overlay + MediaProjection + real-time lightweight vision.
+Touch injection: OFF.

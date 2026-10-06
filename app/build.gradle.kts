@@ -4,26 +4,16 @@ plugins {
 }
 
 android {
-    namespace = "com.brawlbrain.rt"
+    namespace = "com.brawldodge.ai"
     compileSdk = 35
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
-        applicationId = "com.brawlbrain.rt"
+        applicationId = "com.brawldodge.ai"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0-m1"
-
-        ndk {
-            abiFilters += listOf("arm64-v8a")
-        }
-
-        externalNativeBuild {
-            cmake {
-                cppFlags += listOf("-std=c++17")
-            }
-        }
+        versionCode = 10
+        versionName = "1.0.0"
     }
 
     buildTypes {
@@ -45,13 +35,6 @@ android {
         jvmTarget = "17"
     }
 
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
-
     packaging {
         resources.excludes += setOf(
             "META-INF/DEPENDENCIES",
@@ -59,8 +42,4 @@ android {
             "META-INF/NOTICE"
         )
     }
-}
-
-dependencies {
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.30.0")
 }

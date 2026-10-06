@@ -1,36 +1,33 @@
 # Brawl Dodge AI
 
-Milestone 1 implements the real-time screen-capture foundation for the Xiaomi 12X target.
+Ready-to-run Android vision assistant targeted at Xiaomi 12X / Snapdragon 870.
 
-## Scope of M1
+## Included
 
-- MediaProjection screen capture.
-- Newest-frame-only processing with an ImageReader queue depth of two.
-- Working resolution around 640x288, preserving the 20:9 landscape aspect ratio.
-- Native C++ color/shape detector through one JNI call per processed frame.
-- Stable full-screen debug overlay.
-- Thermal-safe processing rate based on Android thermal status.
-- No AccessibilityService and no touch injection in M1.
+- MediaProjection capture.
+- Foreground service for Android 13/14/15 style background execution.
+- Overlay appears immediately after launch.
+- Newest-frame processing.
+- Lightweight real-time vision for player/enemy/projectile/area candidates.
+- Threat score and directional danger indicator.
+- Thermal-aware processing rate.
+- ARM64 Android build.
+- No root and no touch injection.
 
-## M1 detector
+## Start
 
-The native detector is intentionally lightweight. It produces candidates for:
+1. Install the APK.
+2. Allow "Display over other apps".
+3. Press "2. Запустить Brawl Dodge AI".
+4. Accept the Android screen-capture dialog.
+5. Open Brawl Stars and test in Training Cave or Friendly Battle.
 
-- player marker (cyan/green saturated blob)
-- enemy / enemy health-bar candidate (red)
-- projectile candidate (small red blob)
-- area indicator candidate (orange compact blob)
+The overlay is intentionally visible before the first CV result, so a permission or service failure cannot look like a blank transparent screen.
 
-This is a bootstrap detector, not a brawler-specific universal classifier. It must be calibrated and benchmarked against real Training Cave recordings before later milestones depend on it.
+## Xiaomi 12X
 
-## Build
+For long tests, remove battery restrictions for the app and allow autostart/background activity in HyperOS.
 
-GitHub Actions installs Android SDK, NDK and CMake, then builds the debug APK.
+## Scope
 
-Local build requires JDK 17, Android SDK 35, NDK 27.2.12479018, CMake 3.22.1 and Gradle 8.9.
-
-## Testing
-
-Use the Training Cave or Friendly Battle only. After granting overlay and screen-capture permissions, start M1 and verify that the debug boxes follow the player and visible red/orange threats.
-
-M1 is observation-only. Touch injection is deliberately absent.
+The built-in detector is a lightweight color/shape vision baseline. It is intentionally self-contained and does not depend on external model downloads, so startup and APK installation are reliable. It is not a perfect universal Brawl Stars classifier.

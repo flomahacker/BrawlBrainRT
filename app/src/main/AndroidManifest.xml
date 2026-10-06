@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:allowBackup="false"
@@ -13,7 +13,7 @@
         android:theme="@style/AppTheme">
 
         <activity
-            android:name=".m1.MainActivity"
+            android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="landscape">
             <intent-filter>
@@ -22,24 +22,10 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".SettingsActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".MainActivity"
-            android:exported="false"
-            android:screenOrientation="landscape" />
-
         <service
-            android:name=".m1.M1CaptureService"
+            android:name=".DodgeService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
-
-        <service
-            android:name=".ScreenBrainService"
-            android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
-
     </application>
+
 </manifest>
