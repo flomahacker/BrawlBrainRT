@@ -21,6 +21,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.hypot
 import kotlin.math.max
@@ -58,7 +59,6 @@ class DodgeService : Service() {
     private var captureW = 720
     private var captureH = 324
     private var lastProcessAt = 0L
-
     private var fpsWindowStart = 0L
     private var fpsFrames = 0
     private var fps = 0f
@@ -81,6 +81,15 @@ class DodgeService : Service() {
         workerHandler = Handler(worker.looper)
 
         createNotificationChannel()
+
+        try {
+            startAsForeground()
+        } catch (t: Throwable) {
+            latestSummary = "foreground: " + t.javaClass.simpleName
+            stopSelf()
+            return
+        }
+
         registerThermalListener()
 
         if (!Settings.canDrawOverlays(this)) {
@@ -92,7 +101,13 @@ class DodgeService : Service() {
         try {
             attachOverlay()
             isRunning = true
-            submit(VisionSnapshot(online = false, recommendation = "ЗАХВАТ"))
+            latestSummary = "HUD запущен"
+            submit(
+                VisionSnapshot(
+                    online = false,
+                    recommendation = "ЗАХВАТ"
+                )
+            )
         } catch (t: Throwable) {
             latestSummary = "overlay: " + t.javaClass.simpleName
             stopSelf()
@@ -115,7 +130,6 @@ class DodgeService : Service() {
 
         if (resultCode != -1 && data != null && projection == null) {
             try {
-                startAsForeground()
                 startProjection(resultCode, data)
             } catch (t: Throwable) {
                 latestSummary = "ошибка: " + t.javaClass.simpleName
@@ -241,7 +255,7 @@ class DodgeService : Service() {
             }
 
             latestSummary =
-                "CV " + String.format(java.util.Locale.US, "%.1f", processMs) +
+                "CV " + String.format(Locale.US, "%.1f", processMs) +
                     "ms · " + boxes.size + " объектов"
 
             submit(
@@ -374,7 +388,6 @@ class DodgeService : Service() {
             intervalMs = when (status) {
                 PowerManager.THERMAL_STATUS_NONE,
                 PowerManager.THERMAL_STATUS_LIGHT -> 80L
-
                 PowerManager.THERMAL_STATUS_MODERATE -> 110L
                 PowerManager.THERMAL_STATUS_SEVERE -> 150L
                 PowerManager.THERMAL_STATUS_CRITICAL -> 220L
