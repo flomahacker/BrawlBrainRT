@@ -1,0 +1,56 @@
+name: Build TOK APK
+
+on:
+  push:
+    branches:
+      - tok-apk-build
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Build web app
+        working-directory: tok-apk/web
+        run: |
+          npm install
+          npm run build
+
+      - name: Copy web assets into Android
+        run: |
+          rm -rf tok-apk/android/app/src/main/assets/www
+          mkdir -p tok-apk/android/app/src/main/assets/www
+          cp -R tok-apk/web/dist/. tok-apk/android/app/src/main/assets/www/
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        working-directory: tok-apk/android
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: tok-debug-apk
+          path: tok-apk/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
